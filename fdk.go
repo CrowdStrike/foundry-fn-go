@@ -232,8 +232,9 @@ func FalconClient(ctx context.Context, r Request) (*client.CrowdStrikeAPISpecifi
 	}
 	cloud := falcon.Cloud(c)
 	return fcFactory(&falcon.ApiConfig{
-		AccessToken: token,
-		Cloud:       cloud,
-		Context:     ctx,
+		AccessToken:       token,
+		Cloud:             cloud,
+		Context:           ctx,
+		UserAgentOverride: fmt.Sprintf("foundry-fn/%s", Version),
 	})
 }

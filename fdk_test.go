@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -177,10 +178,12 @@ func base64Encode(t *testing.T, v string) string {
 func TestFalconClient(t *testing.T) {
 	var accessToken string
 	var cloud falcon.CloudType
+	var userAgent string
 
 	factory := func(cfg *falcon.ApiConfig) (*client.CrowdStrikeAPISpecification, error) {
 		accessToken = cfg.AccessToken
 		cloud = cfg.Cloud
+		userAgent = cfg.UserAgentOverride
 		return &client.CrowdStrikeAPISpecification{}, nil
 	}
 
@@ -234,6 +237,7 @@ func TestFalconClient(t *testing.T) {
 				assert.NotNil(t, c)
 				assert.Equal(t, "abc", accessToken)
 				assert.Equal(t, falcon.CloudType(falcon.CloudUs2), cloud)
+				assert.Equal(t, fmt.Sprintf("foundry-fn/%s", Version), userAgent)
 			},
 		},
 		{
@@ -257,6 +261,7 @@ func TestFalconClient(t *testing.T) {
 				assert.NotNil(t, c)
 				assert.Equal(t, "abc", accessToken)
 				assert.Equal(t, falcon.CloudType(falcon.CloudUs1), cloud)
+				assert.Equal(t, fmt.Sprintf("foundry-fn/%s", Version), userAgent)
 			},
 		},
 	}
