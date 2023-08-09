@@ -13,7 +13,7 @@ with the open source developer community.
 The SDK can be installed or updated via `go get`:
 
 ```shell
-go get github.com/crowdstrike/foundry-fn-go
+go get github.com/CrowdStrike/foundry-fn-go
 ```
 
 ### From source
@@ -36,7 +36,7 @@ package main
 
 import (
     /* omitting other imports */
-    fdk "github.com/crowdstrike/foundry-fn-go"
+    fdk "github.com/CrowdStrike/foundry-fn-go"
 )
 
 var (
