@@ -1,4 +1,4 @@
-module github.com/crowdstrike/foundry-fn-go
+module github.com/CrowdStrike/foundry-fn-go
 
 go 1.20
 
