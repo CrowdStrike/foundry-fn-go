@@ -102,31 +102,14 @@ func LoadConfig(config interface{}) error {
 }
 
 func convertRequest(req *http.Request) (Request, error) {
-	r := Request{
-		Body: nil,
-		Params: &Params{
-			Header: req.Header,
-			Query:  req.URL.Query(),
-		},
-		URL:    req.URL.String(),
-		Method: req.Method,
+	payload, err := io.ReadAll(req.Body)
+	if err != nil {
+		return Request{}, fmt.Errorf("failed to read request body: %s", err)
 	}
-	if req.Body != nil {
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			return r, err
-		}
-		r.Body = body
 
-		bodyJSON := map[string]json.RawMessage{}
-
-		if errUnmarshal := json.Unmarshal(body, &bodyJSON); errUnmarshal == nil {
-			if _, ok := bodyJSON["context"]; ok {
-				r.Context = bodyJSON["context"]
-			}
-		} else {
-			log.Println(errUnmarshal)
-		}
+	var r Request
+	if err = json.Unmarshal(payload, &r); err != nil {
+		return Request{}, fmt.Errorf("failed to unmarshal request body: %s", err)
 	}
 	return r, nil
 }

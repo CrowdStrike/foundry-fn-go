@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -18,90 +17,72 @@ import (
 )
 
 func Test_convertRequest(t *testing.T) {
-	type args struct {
-		method string
-		url    string
-		body   io.Reader
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    Request
-		wantErr bool
-	}{
-		{
-			name: "context is set with fields",
-			args: args{
-				method: "POST",
-				url:    "https://www.crowdstrike.com",
-				body:   bytes.NewBuffer([]byte(`{"context": {"fields": [{"name": "a", "display": "A", "kind": "foo", "value": "baz"}]}}`)),
-			},
-			want: Request{
-				Body: []byte(`{"context": {"fields": [{"name": "a", "display": "A", "kind": "foo", "value": "baz"}]}}`),
-				Params: &Params{
-					Header: http.Header{},
-					Query:  url.Values{},
-				},
-				URL:     "https://www.crowdstrike.com",
-				Method:  "POST",
-				Context: json.RawMessage(`{"fields": [{"name": "a", "display": "A", "kind": "foo", "value": "baz"}]}`),
-			},
-			wantErr: false,
-		},
-		{
-			name: "context is not set with fields",
-			args: args{
-				method: "POST",
-				url:    "https://www.crowdstrike.com",
-				body:   bytes.NewBuffer([]byte(`{"context": []}`)),
-			},
-			want: Request{
-				Body: []byte(`{"context": []}`),
-				Params: &Params{
-					Header: http.Header{},
-					Query:  url.Values{},
-				},
-				URL:     "https://www.crowdstrike.com",
-				Method:  "POST",
-				Context: json.RawMessage("[]"),
-			},
-			wantErr: false,
-		},
-		{
-			name: "context is not set",
-			args: args{
-				method: "POST",
-				url:    "https://www.crowdstrike.com",
-				body:   bytes.NewBuffer([]byte("{}")),
-			},
-			want: Request{
-				Body: []byte(`{}`),
-				Params: &Params{
-					Header: http.Header{},
-					Query:  url.Values{},
-				},
-				URL:     "https://www.crowdstrike.com",
-				Method:  "POST",
-				Context: nil,
-			},
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req, err := http.NewRequest(tt.args.method, tt.args.url, tt.args.body)
-			require.NoError(t, err)
 
-			got, err := convertRequest(req)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("convertRequest() error = %v, wantErr %v", err, tt.wantErr)
-				return
+	payload := bytes.NewBuffer([]byte(`
+{
+	"access_token": "ad669dff-36df-4713-9c61-3e6840f3d675",
+	"body": {
+		"e5eed0ce688b": "36cc4e7e2d2a"
+	},
+	"context": {
+		"fields": [
+			{
+				"name": "a",
+				"display": "A",
+				"kind": "foo",
+				"value": "baz"
 			}
+		]
+	},
+	"method": "POST",
+	"params": {
+		"header": {
+			"cc7f08e30972": ["203a5cfeabb4"]
+		},
+		"query": {
+			"7226f87a4afa": ["ed368691e4cc"]
+		}
+	},
+	"url": "/1c6f79942cba"
+}`))
+	want := Request{
+		AccessToken: "ad669dff-36df-4713-9c61-3e6840f3d675",
+		Body: []byte(`{
+		"e5eed0ce688b": "36cc4e7e2d2a"
+	}`),
+		Context: json.RawMessage(`{
+		"fields": [
+			{
+				"name": "a",
+				"display": "A",
+				"kind": "foo",
+				"value": "baz"
+			}
+		]
+	}`),
+		Method: "POST",
+		Params: &Params{
+			Header: http.Header{
+				"cc7f08e30972": []string{"203a5cfeabb4"},
+			},
+			Query: url.Values{
+				"7226f87a4afa": []string{"ed368691e4cc"},
+			},
+		},
+		URL: "/1c6f79942cba",
+	}
 
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("convertRequest() got = %+v, want %+v", got, tt.want)
-			}
-		})
+	req, err := http.NewRequest("GET", "/", payload)
+	require.NoError(t, err)
+
+	got, err := convertRequest(req)
+	if err != nil {
+		t.Errorf("convertRequest() error = %v, wantErr nil", err)
+		return
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("convertRequest() got = %+v, want = %+v", got, want)
 	}
 }
 
