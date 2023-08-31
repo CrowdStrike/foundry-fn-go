@@ -9,7 +9,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/textproto"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -119,7 +118,9 @@ func convertRequest(req *http.Request) (Request, error) {
 	}
 	hCanon := make(http.Header)
 	for k, v := range r.Params.Header {
-		hCanon[textproto.CanonicalMIMEHeaderKey(k)] = v
+		for _, s := range v {
+			hCanon.Add(k, s)
+		}
 	}
 	r.Params.Header = hCanon
 	return r, nil
