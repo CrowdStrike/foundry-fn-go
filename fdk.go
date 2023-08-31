@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/textproto"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -111,6 +112,16 @@ func convertRequest(req *http.Request) (Request, error) {
 	if err = json.Unmarshal(payload, &r); err != nil {
 		return Request{}, fmt.Errorf("failed to unmarshal request body: %s", err)
 	}
+
+	// Ensure headers are canonically formatted else header.Get("my-key") won't necessarily work.
+	if r.Params == nil || len(r.Params.Header) == 0 {
+		return r, nil
+	}
+	hCanon := make(http.Header)
+	for k, v := range r.Params.Header {
+		hCanon[textproto.CanonicalMIMEHeaderKey(k)] = v
+	}
+	r.Params.Header = hCanon
 	return r, nil
 }
 

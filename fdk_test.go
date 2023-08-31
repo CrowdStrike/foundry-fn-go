@@ -63,7 +63,7 @@ func Test_convertRequest(t *testing.T) {
 		Method: "POST",
 		Params: &Params{
 			Header: http.Header{
-				"cc7f08e30972": []string{"203a5cfeabb4"},
+				"Cc7f08e30972": []string{"203a5cfeabb4"},
 			},
 			Query: url.Values{
 				"7226f87a4afa": []string{"ed368691e4cc"},
