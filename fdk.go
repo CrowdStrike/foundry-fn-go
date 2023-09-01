@@ -102,32 +102,27 @@ func LoadConfig(config interface{}) error {
 }
 
 func convertRequest(req *http.Request) (Request, error) {
-	r := Request{
-		Body: nil,
-		Params: &Params{
-			Header: req.Header,
-			Query:  req.URL.Query(),
-		},
-		URL:    req.URL.String(),
-		Method: req.Method,
+	payload, err := io.ReadAll(req.Body)
+	if err != nil {
+		return Request{}, fmt.Errorf("failed to read request body: %s", err)
 	}
-	if req.Body != nil {
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			return r, err
-		}
-		r.Body = body
 
-		bodyJSON := map[string]json.RawMessage{}
+	var r Request
+	if err = json.Unmarshal(payload, &r); err != nil {
+		return Request{}, fmt.Errorf("failed to unmarshal request body: %s", err)
+	}
 
-		if errUnmarshal := json.Unmarshal(body, &bodyJSON); errUnmarshal == nil {
-			if _, ok := bodyJSON["context"]; ok {
-				r.Context = bodyJSON["context"]
-			}
-		} else {
-			log.Println(errUnmarshal)
+	// Ensure headers are canonically formatted else header.Get("my-key") won't necessarily work.
+	if r.Params == nil || len(r.Params.Header) == 0 {
+		return r, nil
+	}
+	hCanon := make(http.Header)
+	for k, v := range r.Params.Header {
+		for _, s := range v {
+			hCanon.Add(k, s)
 		}
 	}
+	r.Params.Header = hCanon
 	return r, nil
 }
 
