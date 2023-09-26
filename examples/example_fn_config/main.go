@@ -16,7 +16,7 @@ func main() {
 // newHandler here is showing how a config is integrated. It is using generics,
 // so we can unmarshal the config into a concrete type and then validate it. The
 // OK method is run to validate the contents of the config.
-func newHandler(cfg config) fdk.Handler {
+func newHandler(_ context.Context, cfg config) fdk.Handler {
 	mux := fdk.NewMux()
 	mux.Get("/foo", fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
 		return fdk.Response{

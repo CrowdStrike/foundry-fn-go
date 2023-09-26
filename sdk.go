@@ -109,7 +109,7 @@ type (
 )
 
 // Run is the meat and potatoes. This is the entrypoint for everything.
-func Run[T Cfg](ctx context.Context, newHandlerFn func(cfg T) Handler) {
+func Run[T Cfg](ctx context.Context, newHandlerFn func(_ context.Context, cfg T) Handler) {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true}))
 
 	defer func() {
@@ -134,7 +134,7 @@ func Run[T Cfg](ctx context.Context, newHandlerFn func(cfg T) Handler) {
 		return
 	}
 
-	h := newHandlerFn(cfg)
+	h := newHandlerFn(ctx, cfg)
 
 	run(ctx, logger, h)
 

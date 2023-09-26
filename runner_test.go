@@ -446,7 +446,7 @@ func TestRun_httprunner(t *testing.T) {
 				done := make(chan struct{})
 				go func() {
 					defer close(done)
-					fdk.Run(ctx, func(cfg config) fdk.Handler {
+					fdk.Run(ctx, func(ctx context.Context, cfg config) fdk.Handler {
 						h := tt.newHandlerFn(ctx, cfg)
 						close(readyChan)
 						return h

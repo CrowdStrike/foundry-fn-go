@@ -24,7 +24,7 @@ func RegisterConfigLoader(loaderType string, cr ConfigLoader) {
 }
 
 func loadConfigBytes(ctx context.Context) ([]byte, error) {
-	crt := os.Getenv("CONFIG_LOADER_TYPE")
+	crt := os.Getenv("CS_CONFIG_LOADER_TYPE")
 	if crt == "" {
 		crt = "fs"
 	}
