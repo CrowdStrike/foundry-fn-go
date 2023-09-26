@@ -22,7 +22,7 @@ func RegisterRunner(runnerType string, r Runner) {
 }
 
 func run(ctx context.Context, logger *slog.Logger, h Handler) {
-	rt := os.Getenv("RUNNER_TYPE")
+	rt := os.Getenv("CS_RUNNER_TYPE")
 	if rt == "" {
 		rt = "http"
 	}
