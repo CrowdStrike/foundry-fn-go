@@ -11,6 +11,7 @@ import (
 	"strconv"
 )
 
+// Fn returns the active function id and version.
 func Fn() struct {
 	ID      string
 	Version int
@@ -38,8 +39,10 @@ type Handler interface {
 	Handle(ctx context.Context, r Request) Response
 }
 
+// HandlerFn wraps a function to return a handler. Similar to the http.HandlerFunc.
 type HandlerFn func(ctx context.Context, r Request) Response
 
+// Handle is the request/response lifecycle handler.
 func (h HandlerFn) Handle(ctx context.Context, r Request) Response {
 	return h(ctx, r)
 }
@@ -47,8 +50,6 @@ func (h HandlerFn) Handle(ctx context.Context, r Request) Response {
 // HandleFnOf provides a means to translate the incoming requests to the destination body type.
 // This normalizes the sad path and provides the caller with a zero fuss request to work with. Reducing
 // json boilerplate for what is essentially the same operation on different types.
-//
-// TODO(berg): name could be HandlerOf perhaps?
 func HandleFnOf[T any](fn func(context.Context, RequestOf[T]) Response) Handler {
 	return HandlerFn(func(ctx context.Context, r Request) Response {
 		var v T
@@ -68,18 +69,11 @@ func HandleFnOf[T any](fn func(context.Context, RequestOf[T]) Response) Handler 
 }
 
 type (
-	// Request a word for Request. We can treat it as an internal impl details, and provide the
-	// user an http.Request, built from this internal impl. They can then build up
-	// the usual http.ServeHTTP, the same as they are likely accustomed too. We too
-	// can take advantage of this and add middleware,etc to the runner as needed. When testing
-	// locally, they just use curl, and they provide it the way they are use too. For our lambda
-	// impl, we convert it to the expected request body the http server expects, then its treated
-	// the same as our standard impl.
+	// Request defines a request structure that is given to the runner. The Body is set to
+	// json.RawMessage, to enable decoration/middleware.
 	Request RequestOf[json.RawMessage]
 
-	// RequestOf provides a generic body we can target our unmarshaling into. We don't have to have this
-	// as some users may be happy with the OG Request. However, we can express the former with the latter
-	// here.
+	// RequestOf provides a generic body we can target our unmarshaling into.
 	RequestOf[T any] struct {
 		Body T
 		// TODO(berg): can we axe Context? have workflow put details in the body/headers/params instead?
@@ -95,6 +89,7 @@ type (
 		AccessToken string
 	}
 
+	// Response is the domain type for the response.
 	Response struct {
 		Body   json.Marshaler
 		Code   int
@@ -102,6 +97,7 @@ type (
 		Header http.Header
 	}
 
+	// APIError defines a error that is shared back to the caller.
 	APIError struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
