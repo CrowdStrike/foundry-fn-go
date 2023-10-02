@@ -58,12 +58,14 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 	go func() {
 		select {
 		case <-ctx.Done():
+			logger.Info("shutting down HTTP server...")
 			if err := s.Shutdown(ctx); err != nil {
 				logger.Error("failed to shutdown server", "err", err)
 			}
 		}
 	}()
 
+	logger.Info("serving HTTP server on port " + strconv.Itoa(port()))
 	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("unexpected shutdown of server", "err", err)
 	}
