@@ -21,7 +21,7 @@ func newHandler(context.Context, fdk.SkipCfg) fdk.Handler {
 		return fdk.Response{
 			Body:   json.RawMessage(`{"foo":"val"}`),
 			Code:   200,
-			Header: http.Header{"X-Cs-Method": []string{r.Method}},
+			Header: http.Header{"X-Fn-Method": []string{r.Method}},
 		}
 	}))
 	return mux

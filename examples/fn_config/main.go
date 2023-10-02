@@ -22,14 +22,14 @@ func newHandler(_ context.Context, cfg config) fdk.Handler {
 		return fdk.Response{
 			Body:   json.RawMessage(`{"foo":"val"}`),
 			Code:   200,
-			Header: http.Header{"X-Cs-Method": []string{r.Method}},
+			Header: http.Header{"X-Fn-Method": []string{r.Method}},
 		}
 	}))
 	mux.Post("/foo", fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
 		return fdk.Response{
 			Body:   r.Body,
 			Code:   201,
-			Header: http.Header{"X-Cs-Method": []string{r.Method}},
+			Header: http.Header{"X-Fn-Method": []string{r.Method}},
 		}
 	}))
 	return mux
