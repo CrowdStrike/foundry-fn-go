@@ -176,6 +176,7 @@ func listen(s *http.Server, shutdownTimeout time.Duration) {
 
 	// Run the HTTP server in a separate go-routine.
 	go func() {
+		log.Printf("Serving HTTP server to %s", s.Addr)
 		if err := s.ListenAndServe(); errors.Is(err, http.ErrServerClosed) {
 			log.Printf("[entrypoint] Error ListenAndServe: %v", err)
 			close(idleConnsClosed)
