@@ -89,20 +89,32 @@ type (
 		AccessToken string
 	}
 
-	// Response is the domain type for the response.
-	Response struct {
-		Body   json.Marshaler
-		Code   int
-		Errors []APIError
-		Header http.Header
-	}
-
 	// APIError defines a error that is shared back to the caller.
 	APIError struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
 	}
 )
+
+// Response is the domain type for the response.
+type Response struct {
+	Body   json.Marshaler
+	Code   int
+	Errors []APIError
+	Header http.Header
+}
+
+// StatusCode returns the response status code. When a Response.Code is not
+// set and errors exist, then the highest code on the errors is returned.
+func (r Response) StatusCode() int {
+	code := r.Code
+	if code == 0 && len(r.Errors) > 0 {
+		for _, e := range r.Errors {
+			code = e.Code
+		}
+	}
+	return code
+}
 
 // Run is the meat and potatoes. This is the entrypoint for everything.
 func Run[T Cfg](ctx context.Context, newHandlerFn func(_ context.Context, cfg T) Handler) {

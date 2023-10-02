@@ -142,16 +142,8 @@ func writeResponse(logger *slog.Logger, req *http.Request, w http.ResponseWriter
 		}
 	}
 
-	code := resp.Code
-	if code == 0 && len(resp.Errors) > 0 {
-		for _, e := range resp.Errors {
-			if e.Code > code {
-				code = e.Code
-			}
-		}
-	}
-	if code > 0 {
-		w.WriteHeader(code)
+	if resp.StatusCode() > 0 {
+		w.WriteHeader(resp.StatusCode())
 	}
 
 	_, err = w.Write(b)
