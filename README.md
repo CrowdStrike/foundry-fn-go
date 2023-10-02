@@ -29,61 +29,75 @@ go build .
 
 ### Code
 
-Add the SDK to your project by following the [installation](#installation) instructions above, then create your `main.go`:
+Add the SDK to your project by following the [installation](#installation) instructions above, then create
+your `main.go`:
 
 ```go
 package main
 
 import (
-    /* omitting other imports */
-    fdk "github.com/CrowdStrike/foundry-fn-go"
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+
+	fdk "github.com/CrowdStrike/foundry-fn-go"
 )
 
-var (
-    cfg *fdk.Config /*** (1) ***/
-)
-
-/*** (2) ***/
-func RunHandler(_ context.Context, request fdk.Request /*** (3) ***/) (fdk.Response, error) {
-    b := bytes.NewBuffer(nil)
-    err := json.NewEncoder(b).Encode(request)
-    return fdk.Response{Body: b.Bytes(), Code: 200}, err /*** (4) ***/
+func main() {
+	fdk.Run(context.Background(), newHandler)
 }
 
-func main() { /*** (5) ***/
-    cfg = &fdk.Config{}
-    err := fdk.LoadConfig(cfg) /*** (6) ***/
-    if err != nil && err != fdk.ErrNoConfig {
-        os.Exit(1)
-    }
-    fdk.Start(RunHandler) /*** (7) ***/
+// newHandler here is showing how a config is integrated. It is using generics,
+// so we can unmarshal the config into a concrete type and then validate it. The
+// OK method is run to validate the contents of the config.
+func newHandler(_ context.Context, cfg config) fdk.Handler {
+	mux := fdk.NewMux()
+	mux.Post("/echo", fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
+		return fdk.Response{
+			Body:   r.Body,
+			Code:   201,
+			Header: http.Header{"X-Cs-Method": []string{r.Method}},
+		}
+	}))
+	return mux
+}
+
+type config struct {
+	Int int    `json:"integer"`
+	Str string `json:"string"`
+}
+
+func (c config) OK() error {
+	var errs []error
+	if c.Int < 1 {
+		errs = append(errs, errors.New("integer must be greater than 0"))
+	}
+	if c.Str == "" {
+		errs = append(errs, errors.New("non empty string must be provided"))
+	}
+	return errors.Join(errs...)
 }
 ```
 
-1. `cfg`: A global variable which holds any loaded configuration. Should be initialized exactly once within `main()`.
-2. `RunHandler()`: Called once on each inbound request. This is where the business logic of the function should
-   exist.
-3. `request`: Request payload and metadata. At the time of this writing, the `Request` struct consists of:
+1. `config`: A type the raw json config is unmarshalled into.
+2. `Request`: Request payload and metadata. At the time of this writing, the `Request` struct consists of:
     1. `Body`: The raw request payload as given in the Function Gateway `body` payload field.
     2. `Params`: Contains request headers and query parameters.
     3. `URL`: The request path relative to the function as a string.
     4. `Method`: The request HTTP method or verb.
     5. `Context`: Caller-supplied raw context.
     6. `AccessToken`: Caller-supplied access token.
-4. Return from `RunHandler()`: Returns two values - a `Response` and an `error`.
-    1. The `Response` contains fields `Body` (the payload of the response), `Code` (an HTTP status code),
-       `Errors` (a slice of `APIError`s), and `Headers` (a map of any special HTTP headers which should be present on
-       the response).
-    2. The `error` is an indication that there was a transient error on the request.
-       In production, returning a non-nil `error` will result in a retry of the request.
-       There is a limited number of reties before the request will be dead-lettered.
-       ***Do not return an `error` unless you actually want the request to be retried.***
-5. `main()`: Initialization and bootstrap logic. Called exactly once at the startup of the runtime.
-   Any initialization logic should exist prior to calling `fdk.Start()`.
-6. `LoadConfig(cfg)`: Loads any configuration deployed along with function into the `*fdk.Config`.
-   Will return an `ErrNoConfig` if no configuration was available to be loaded.
-   Will return another `error` if there was some other error loading the configuration.
-7. `fdk.Start(RunHandler)`: Binds the handler function to the runtime and starts listening to inbound requests.
+3. `Response`
+   1. The `Response` contains fields `Body` (the payload of the response), `Code` (an HTTP status code),
+      `Errors` (a slice of `APIError`s), and `Headers` (a map of any special HTTP headers which should be present on
+      the response).
+      4`main()`: Initialization and bootstrap logic all contained with fdk.Run and handler constructor.
+
+more examples can be found at:
+* [fn with config](examples/fn_config) 
+* [fn without config](examples/fn_no_config)
+* [more complex/complete example](examples/complex)
 
 ### Testing locally
 
@@ -110,35 +124,41 @@ curl -X POST http://localhost:8081/echo \
 
 ### `gofalcon`
 
-Foundry Function Go ships with [gofalcon](https://github.com/CrowdStrike/gofalcon) pre-integrated and a convenience constructor.
+Foundry Function Go ships with [gofalcon](https://github.com/CrowdStrike/gofalcon) pre-integrated and a convenience
+constructor.
 While it is not strictly necessary to use convenience function, it is recommended.
 
 **Important:** Create a new instance of the `gofalcon` client on each request.
 
 ```go
+package main
+
 import (
-    /* omitting other imports */
-    fdk "github.com/crowdstrike/foundry-fn-go"
+	"context"
+	"net/http"
+
+	/* omitting other imports */
+	fdk "github.com/crowdstrike/foundry-fn-go"
 )
 
-func RunHandler(ctx context.Context, request fdk.Request) (fdk.Response, error) {
-    /* ... omitting other code ... */
-    
-    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    // !!! create a new client instance on each request !!!
-    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    
-    client, err := fdk.FalconClient(ctx, request)
-    if err != nil {
-        if err == fdk.ErrFalconNoToken {
-            // not a processable request
-            return fdk.Response{ /* snip */ }, nil
-        }
-        // some other error - see gofalcon documentation
-    }
-    
-    /* ... omitting other code ... */
+func newHandler(_ context.Context, cfg config) fdk.Handler {
+	mux := fdk.NewMux()
+	mux.Post("/echo", fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
+		client, err := fdk.FalconClient(ctx, request)
+		if err != nil {
+			if err == fdk.ErrFalconNoToken {
+				// not a processable request
+				return fdk.Response{ /* snip */ }
+			}
+			// some other error - see gofalcon documentation
+		}
+
+		// trim rest
+	}))
+	return mux
 }
+
+// omitting rest of implementation
 ```
 
 ---
