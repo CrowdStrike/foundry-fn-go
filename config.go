@@ -3,7 +3,6 @@ package fdk
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 )
 
@@ -22,31 +21,42 @@ func (n SkipCfg) OK() error {
 	return nil
 }
 
-func readCfg[T Cfg](ctx context.Context, logger *slog.Logger) (T, *APIError) {
+type cfgErr struct {
+	err    error
+	apiErr APIError
+}
+
+func readCfg[T Cfg](ctx context.Context) (T, *cfgErr) {
 	var cfg T
 	switch any(cfg).(type) {
 	// exceptional case, where a func does not need/want a config
 	// otherwise, we'll decode into the target type
 	case SkipCfg, *SkipCfg:
-		logger.Info("skipping config loading")
 		return *new(T), nil
 	}
 
 	cfgB, err := loadConfigBytes(ctx)
 	if err != nil {
-		logger.Error("failed to read config", "err", err)
-		return *new(T), &APIError{Code: http.StatusInternalServerError, Message: "failed to read config source"}
+		return *new(T), &cfgErr{
+			err:    err,
+			apiErr: APIError{Code: http.StatusInternalServerError, Message: "failed to read config source"},
+		}
 	}
 
 	err = json.Unmarshal(cfgB, &cfg)
 	if err != nil {
-		logger.Error("failed to unmarshal config into config type", "err", err)
-		return *new(T), &APIError{Code: http.StatusBadRequest, Message: "failed to unmarshal config into config type"}
+		return *new(T), &cfgErr{
+			err:    err,
+			apiErr: APIError{Code: http.StatusBadRequest, Message: "failed to unmarshal config into config type"},
+		}
+
 	}
 
 	err = cfg.OK()
 	if err != nil {
-		return *new(T), &APIError{Code: http.StatusBadRequest, Message: "config is invalid: " + err.Error()}
+		return *new(T), &cfgErr{
+			apiErr: APIError{Code: http.StatusBadRequest, Message: "config is invalid: " + err.Error()},
+		}
 	}
 
 	return cfg, nil

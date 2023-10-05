@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"time"
 )
 
 const (
@@ -58,8 +59,11 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 	go func() {
 		select {
 		case <-ctx.Done():
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+
 			logger.Info("shutting down HTTP server...")
-			if err := s.Shutdown(ctx); err != nil {
+			if err := s.Shutdown(shutdownCtx); err != nil {
 				logger.Error("failed to shutdown server", "err", err)
 			}
 		}

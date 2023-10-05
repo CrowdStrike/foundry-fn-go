@@ -122,8 +122,8 @@ func Run[T Cfg](ctx context.Context, newHandlerFn func(_ context.Context, cfg T)
 
 	defer func() {
 		if err := recover(); err != nil {
-			logger.Error("panic caught", "stack_trace", string(debug.Stack()))
 			run(ctx, logger, HandlerFn(func(ctx context.Context, r Request) Response {
+				logger.Error("panic caught", "stack_trace", string(debug.Stack()))
 				return Response{
 					Errors: []APIError{{
 						Code:    http.StatusServiceUnavailable,
@@ -134,10 +134,13 @@ func Run[T Cfg](ctx context.Context, newHandlerFn func(_ context.Context, cfg T)
 		}
 	}()
 
-	cfg, apiErr := readCfg[T](ctx, logger)
-	if apiErr != nil {
+	cfg, loadErr := readCfg[T](ctx)
+	if loadErr != nil {
 		run(ctx, logger, HandlerFn(func(ctx context.Context, r Request) Response {
-			return Response{Errors: []APIError{*apiErr}}
+			if loadErr.err != nil {
+				logger.Error("failed to load config", "err", loadErr.err)
+			}
+			return Response{Errors: []APIError{loadErr.apiErr}}
 		}))
 		return
 	}
