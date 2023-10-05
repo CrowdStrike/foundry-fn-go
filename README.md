@@ -92,7 +92,7 @@ func (c config) OK() error {
    1. The `Response` contains fields `Body` (the payload of the response), `Code` (an HTTP status code),
       `Errors` (a slice of `APIError`s), and `Headers` (a map of any special HTTP headers which should be present on
       the response).
-      4`main()`: Initialization and bootstrap logic all contained with fdk.Run and handler constructor.
+4. `main()`: Initialization and bootstrap logic all contained with fdk.Run and handler constructor.
 
 more examples can be found at:
 * [fn with config](examples/fn_config) 
