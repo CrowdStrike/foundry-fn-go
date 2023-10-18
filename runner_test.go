@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -429,7 +431,6 @@ func TestRun_httprunner(t *testing.T) {
 		}
 
 		for _, tt := range tests {
-			tt := tt
 			fn := func(t *testing.T) {
 				if tt.inputs.config != "" {
 					tmp := filepath.Join(t.TempDir(), "config.json")
@@ -438,6 +439,8 @@ func TestRun_httprunner(t *testing.T) {
 					err := os.WriteFile(tmp, []byte(tt.inputs.config), 0666)
 					mustNoErr(t, err)
 				}
+				port := newIP(t)
+				t.Setenv("PORT", port)
 
 				readyChan := make(chan struct{})
 				ctx, cancel := context.WithCancel(context.Background())
@@ -466,7 +469,7 @@ func TestRun_httprunner(t *testing.T) {
 				req, err := http.NewRequestWithContext(
 					ctx,
 					tt.inputs.method,
-					"http://localhost:8081"+path.Join("/", tt.inputs.path),
+					"http://localhost:"+port+path.Join("/", tt.inputs.path),
 					reqBody,
 				)
 				mustNoErr(t, err)
@@ -627,4 +630,20 @@ func decodeBody(t testing.TB, r io.Reader, v any) {
 	if err != nil {
 		t.Fatalf("failed to unmarshal json: %s\n\t\tpayload:\t%s", err, string(b))
 	}
+}
+
+func newIP(t *testing.T) string {
+	t.Helper()
+
+	l, err := net.Listen("tcp", "127.0.0.1:")
+	mustNoErr(t, err)
+	defer func() {
+		mustNoErr(t, l.Close())
+	}()
+
+	parts := strings.Split(l.Addr().String(), ":")
+	if len(parts) == 1 {
+		t.Fatal("invalid parts returned: ", parts)
+	}
+	return parts[len(parts)-1]
 }
