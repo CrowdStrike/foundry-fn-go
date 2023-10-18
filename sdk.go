@@ -113,6 +113,9 @@ func (r Response) StatusCode() int {
 			code = e.Code
 		}
 	}
+	if code == 0 {
+		code = http.StatusOK
+	}
 	return code
 }
 
