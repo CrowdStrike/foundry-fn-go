@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -25,15 +25,17 @@ func TestRun_httprunner(t *testing.T) {
 	t.Run("when executing provided handler with successful startup", func(t *testing.T) {
 		type (
 			inputs struct {
+				accessToken string
 				body        []byte
 				config      string
+				context     []byte
 				headers     http.Header
 				method      string
 				path        string
 				queryParams url.Values
 			}
 
-			wantFn func(t *testing.T, resp *http.Response)
+			wantFn func(t *testing.T, resp *http.Response, got respBody)
 		)
 
 		tests := []struct {
@@ -60,17 +62,8 @@ func TestRun_httprunner(t *testing.T) {
 					m.Delete("/path", newSimpleHandler(cfg))
 					return m
 				},
-				want: func(t *testing.T, resp *http.Response) {
-					equalVals(t, 201, resp.StatusCode)
-
-					wantHeaders := make(http.Header)
-					wantHeaders.Set("X-Cs-Origin", "fooorigin")
-					wantHeaders.Set("X-Cs-Executionid", "exec_id")
-					wantHeaders.Set("X-Cs-Traceid", "trace_id")
-					containsHeaders(t, wantHeaders, resp.Header)
-
-					var got respBody
-					decodeBody(t, resp.Body, &got)
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					equalVals(t, 200, resp.StatusCode)
 
 					if len(got.Errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
@@ -79,16 +72,15 @@ func TestRun_httprunner(t *testing.T) {
 					echo := got.Req
 					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
 
-					if len(echo.Req.Body) > 0 {
-						t.Errorf("invalid request body received\n\t\tgot: %s", string(echo.Req.Body))
-					}
-					if len(echo.Req.Context) > 0 {
-						t.Errorf("invalid request context received\n\t\tgot: %s", string(echo.Req.Context))
-					}
 					equalVals(t, "/path", echo.Req.Path)
 					equalVals(t, "DELETE", echo.Req.Method)
-					containsHeaders(t, wantHeaders, echo.Req.Headers)
 					equalVals(t, "id1", echo.Req.Queries.Get("ids"))
+
+					wantHeaders := make(http.Header)
+					wantHeaders.Set("X-Cs-Origin", "fooorigin")
+					wantHeaders.Set("X-Cs-Executionid", "exec_id")
+					wantHeaders.Set("X-Cs-Traceid", "trace_id")
+					containsHeaders(t, wantHeaders, echo.Req.Headers)
 				},
 			},
 			{
@@ -109,17 +101,9 @@ func TestRun_httprunner(t *testing.T) {
 					m.Get("/path", newSimpleHandler(cfg))
 					return m
 				},
-				want: func(t *testing.T, resp *http.Response) {
-					equalVals(t, 201, resp.StatusCode)
-
-					wantHeaders := make(http.Header)
-					wantHeaders.Set("X-Cs-Origin", "fooorigin")
-					wantHeaders.Set("X-Cs-Executionid", "exec_id")
-					wantHeaders.Set("X-Cs-Traceid", "trace_id")
-					containsHeaders(t, wantHeaders, resp.Header)
-
-					var got respBody
-					decodeBody(t, resp.Body, &got)
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					equalVals(t, 200, resp.StatusCode)
+					equalVals(t, 201, got.Code)
 
 					if len(got.Errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
@@ -130,15 +114,21 @@ func TestRun_httprunner(t *testing.T) {
 
 					equalVals(t, "GET", echo.Req.Method)
 					equalVals(t, "/path", echo.Req.Path)
-					containsHeaders(t, wantHeaders, echo.Req.Headers)
 					equalVals(t, "baz", echo.Req.Queries.Get("bar"))
+
+					wantHeaders := make(http.Header)
+					wantHeaders.Set("X-Cs-Origin", "fooorigin")
+					wantHeaders.Set("X-Cs-Executionid", "exec_id")
+					wantHeaders.Set("X-Cs-Traceid", "trace_id")
+					containsHeaders(t, wantHeaders, echo.Req.Headers)
 				},
 			},
 			{
 				name: "simple POST request should pass",
 				inputs: inputs{
-					body:   []byte(`{"dodgers":"stink","context":{"kings":"stink_too"}}`),
-					config: `{"string": "val","integer": 1}`,
+					body:    []byte(`{"dodgers":"stink"}`),
+					context: []byte(`{"kings":"stink_too"}`),
+					config:  `{"string": "val","integer": 1}`,
 					headers: http.Header{
 						"X-Cs-Origin":      []string{"fooorigin"},
 						"X-Cs-Executionid": []string{"exec_id"},
@@ -152,17 +142,9 @@ func TestRun_httprunner(t *testing.T) {
 					m.Post("/path", newJSONBodyHandler(cfg))
 					return m
 				},
-				want: func(t *testing.T, resp *http.Response) {
-					equalVals(t, 201, resp.StatusCode)
-
-					wantHeaders := make(http.Header)
-					wantHeaders.Set("X-Cs-Origin", "fooorigin")
-					wantHeaders.Set("X-Cs-Executionid", "exec_id")
-					wantHeaders.Set("X-Cs-Traceid", "trace_id")
-					containsHeaders(t, wantHeaders, resp.Header)
-
-					var got respBody
-					decodeBody(t, resp.Body, &got)
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					equalVals(t, 200, resp.StatusCode)
+					equalVals(t, 201, got.Code)
 
 					if len(got.Errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
@@ -170,11 +152,16 @@ func TestRun_httprunner(t *testing.T) {
 
 					echo := got.Req
 
-					equalVals(t, `{"dodgers":"stink","context":{"kings":"stink_too"}}`, string(echo.Req.Body))
+					equalVals(t, `{"dodgers":"stink"}`, string(echo.Req.Body))
 					equalVals(t, `{"kings":"stink_too"}`, string(echo.Req.Context))
 					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
 					equalVals(t, "/path", echo.Req.Path)
 					equalVals(t, "POST", echo.Req.Method)
+
+					wantHeaders := make(http.Header)
+					wantHeaders.Set("X-Cs-Origin", "fooorigin")
+					wantHeaders.Set("X-Cs-Executionid", "exec_id")
+					wantHeaders.Set("X-Cs-Traceid", "trace_id")
 					containsHeaders(t, wantHeaders, echo.Req.Headers)
 				},
 			},
@@ -196,17 +183,9 @@ func TestRun_httprunner(t *testing.T) {
 					m.Put("/path", newJSONBodyHandler(cfg))
 					return m
 				},
-				want: func(t *testing.T, resp *http.Response) {
-					equalVals(t, 201, resp.StatusCode)
-
-					wantHeaders := make(http.Header)
-					wantHeaders.Set("X-Cs-Origin", "fooorigin")
-					wantHeaders.Set("X-Cs-Executionid", "exec_id")
-					wantHeaders.Set("X-Cs-Traceid", "trace_id")
-					containsHeaders(t, wantHeaders, resp.Header)
-
-					var got respBody
-					decodeBody(t, resp.Body, &got)
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					equalVals(t, 200, resp.StatusCode)
+					equalVals(t, 201, got.Code)
 
 					if len(got.Errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
@@ -218,6 +197,11 @@ func TestRun_httprunner(t *testing.T) {
 					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
 					equalVals(t, "/path", echo.Req.Path)
 					equalVals(t, "PUT", echo.Req.Method)
+
+					wantHeaders := make(http.Header)
+					wantHeaders.Set("X-Cs-Origin", "fooorigin")
+					wantHeaders.Set("X-Cs-Executionid", "exec_id")
+					wantHeaders.Set("X-Cs-Traceid", "trace_id")
 					containsHeaders(t, wantHeaders, echo.Req.Headers)
 				},
 			},
@@ -243,17 +227,9 @@ func TestRun_httprunner(t *testing.T) {
 					m.Put("/path", newJSONBodyHandler(cfg))
 					return m
 				},
-				want: func(t *testing.T, resp *http.Response) {
-					equalVals(t, 201, resp.StatusCode)
-
-					wantHeaders := make(http.Header)
-					wantHeaders.Set("X-Cs-Origin", "fooorigin")
-					wantHeaders.Set("X-Cs-Executionid", "exec_id")
-					wantHeaders.Set("X-Cs-Traceid", "trace_id")
-					containsHeaders(t, wantHeaders, resp.Header)
-
-					var got respBody
-					decodeBody(t, resp.Body, &got)
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					equalVals(t, 200, resp.StatusCode)
+					equalVals(t, 201, got.Code)
 
 					if len(got.Errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
@@ -265,6 +241,11 @@ func TestRun_httprunner(t *testing.T) {
 					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
 					equalVals(t, "/path", echo.Req.Path)
 					equalVals(t, "POST", echo.Req.Method)
+
+					wantHeaders := make(http.Header)
+					wantHeaders.Set("X-Cs-Origin", "fooorigin")
+					wantHeaders.Set("X-Cs-Executionid", "exec_id")
+					wantHeaders.Set("X-Cs-Traceid", "trace_id")
 					containsHeaders(t, wantHeaders, echo.Req.Headers)
 
 				},
@@ -286,17 +267,9 @@ func TestRun_httprunner(t *testing.T) {
 					m.Delete("/found", newJSONBodyHandler(cfg))
 					return m
 				},
-				want: func(t *testing.T, resp *http.Response) {
-					equalVals(t, 404, resp.StatusCode)
-
-					wantHeaders := make(http.Header)
-					wantHeaders.Set("X-Cs-Origin", "fooorigin")
-					wantHeaders.Set("X-Cs-Executionid", "exec_id")
-					wantHeaders.Set("X-Cs-Traceid", "trace_id")
-					containsHeaders(t, wantHeaders, resp.Header)
-
-					var got respBody
-					decodeBody(t, resp.Body, &got)
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					equalVals(t, 200, resp.StatusCode)
+					equalVals(t, 404, got.Code)
 
 					if len(got.Errs) != 1 {
 						t.Fatalf("did not received expected number of errors\n\t\twant:\t1 error\n\t\tgot:\t%+v", got.Errs)
@@ -323,17 +296,9 @@ func TestRun_httprunner(t *testing.T) {
 					m.Get("/should-be-get", newJSONBodyHandler(cfg))
 					return m
 				},
-				want: func(t *testing.T, resp *http.Response) {
-					equalVals(t, 405, resp.StatusCode)
-
-					wantHeaders := make(http.Header)
-					wantHeaders.Set("X-Cs-Origin", "fooorigin")
-					wantHeaders.Set("X-Cs-Executionid", "exec_id")
-					wantHeaders.Set("X-Cs-Traceid", "trace_id")
-					containsHeaders(t, wantHeaders, resp.Header)
-
-					var got respBody
-					decodeBody(t, resp.Body, &got)
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					equalVals(t, 200, resp.StatusCode)
+					equalVals(t, 405, got.Code)
 
 					if len(got.Errs) != 1 {
 						t.Fatalf("did not received expected number of errors\n\t\twant:\t1 error\n\t\tgot:\t%+v", got.Errs)
@@ -360,19 +325,9 @@ func TestRun_httprunner(t *testing.T) {
 					m.Get("/path", newJSONBodyHandler(cfg))
 					return m
 				},
-				want: func(t *testing.T, resp *http.Response) {
-					equalVals(t, 400, resp.StatusCode)
-
-					wantHeaders := make(http.Header)
-					wantHeaders.Set("X-Cs-Origin", "fooorigin")
-					wantHeaders.Set("X-Cs-Executionid", "exec_id")
-					wantHeaders.Set("X-Cs-Traceid", "trace_id")
-					containsHeaders(t, wantHeaders, resp.Header)
-
-					var got struct {
-						Errs []fdk.APIError `json:"errors"`
-					}
-					decodeBody(t, resp.Body, &got)
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					equalVals(t, 200, resp.StatusCode)
+					equalVals(t, 400, got.Code)
 
 					if len(got.Errs) != 1 {
 						t.Fatalf("did not received expected number of errors\n\t\twant:\t1 error\n\t\tgot:\t%+v", got.Errs)
@@ -403,19 +358,9 @@ func TestRun_httprunner(t *testing.T) {
 					m.Post("/path", newJSONBodyHandler(cfg))
 					return m
 				},
-				want: func(t *testing.T, resp *http.Response) {
-					equalVals(t, http.StatusInternalServerError, resp.StatusCode)
-
-					wantHeaders := make(http.Header)
-					wantHeaders.Set("X-Cs-Origin", "fooorigin")
-					wantHeaders.Set("X-Cs-Executionid", "exec_id")
-					wantHeaders.Set("X-Cs-Traceid", "trace_id")
-					containsHeaders(t, wantHeaders, resp.Header)
-
-					var got struct {
-						Errs []fdk.APIError `json:"errors"`
-					}
-					decodeBody(t, resp.Body, &got)
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					equalVals(t, 200, resp.StatusCode)
+					equalVals(t, http.StatusInternalServerError, got.Code)
 
 					if len(got.Errs) != 1 {
 						t.Fatalf("did not received expected number of errors\n\t\twant:\t1 error\n\t\tgot:\t%+v", got.Errs)
@@ -461,38 +406,51 @@ func TestRun_httprunner(t *testing.T) {
 				case <-time.After(50 * time.Millisecond):
 				}
 
-				var reqBody io.Reader
-				if len(tt.inputs.body) > 0 {
-					reqBody = bytes.NewBuffer(tt.inputs.body)
+				body := struct {
+					AccessToken string          `json:"access_token"`
+					Body        json.RawMessage `json:"body"`
+					Context     json.RawMessage `json:"context"`
+					Method      string          `json:"method"`
+					Params      struct {
+						Header http.Header `json:"header"`
+						Query  url.Values  `json:"query"`
+					} `json:"params"`
+					URL string `json:"url"`
+				}{
+					Body: tt.inputs.body,
+					Params: struct {
+						Header http.Header `json:"header"`
+						Query  url.Values  `json:"query"`
+					}{
+						Header: tt.inputs.headers,
+						Query:  tt.inputs.queryParams,
+					},
+					URL:         tt.inputs.path,
+					Method:      tt.inputs.method,
+					Context:     tt.inputs.context,
+					AccessToken: tt.inputs.accessToken,
 				}
+
+				b, err := json.Marshal(body)
+				mustNoErr(t, err)
 
 				req, err := http.NewRequestWithContext(
 					ctx,
-					tt.inputs.method,
-					"http://localhost:"+port+path.Join("/", tt.inputs.path),
-					reqBody,
+					http.MethodPost,
+					"http://localhost:"+port,
+					bytes.NewBuffer(b),
 				)
 				mustNoErr(t, err)
-
-				for h, vals := range tt.inputs.headers {
-					for _, v := range vals {
-						req.Header.Add(h, v)
-					}
-				}
-
-				q := req.URL.Query()
-				for name, vals := range tt.inputs.queryParams {
-					for _, v := range vals {
-						q.Add(name, v)
-					}
-				}
-				req.URL.RawQuery = q.Encode()
 
 				resp, err := http.DefaultClient.Do(req)
 				mustNoErr(t, err)
 				cancel()
+				defer func() { _ = resp.Body.Close() }()
 
-				tt.want(t, resp)
+				var got respBody
+				decodeBody(t, resp.Body, &got)
+
+				tt.want(t, resp, got)
 			}
 			t.Run(tt.name, fn)
 		}
@@ -519,8 +477,10 @@ func (c config) OK() error {
 
 type (
 	respBody struct {
-		Errs []fdk.APIError `json:"errors"`
-		Req  echoReq        `json:"body"`
+		Code    int            `json:"code"`
+		Errs    []fdk.APIError `json:"errors"`
+		Headers http.Header    `json:"headers"`
+		Req     echoReq        `json:"body"`
 	}
 
 	echoReq struct {
@@ -625,6 +585,7 @@ func decodeBody(t testing.TB, r io.Reader, v any) {
 	if err != nil {
 		t.Fatal("failed to read: " + err.Error())
 	}
+	fmt.Println("body: ", string(b))
 
 	err = json.Unmarshal(b, v)
 	if err != nil {

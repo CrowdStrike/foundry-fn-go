@@ -34,7 +34,7 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 		r, err := toRequest(req)
 		if err != nil {
 			logger.Error("failed to create request", "err", err)
-			writeErr := writeResponse(logger, req, w, Response{
+			writeErr := writeResponse(logger, w, Response{
 				Errors: []APIError{{Code: http.StatusInternalServerError, Message: "unable to process incoming request"}},
 			})
 			if writeErr != nil {
@@ -45,7 +45,7 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 
 		resp := h.Handle(ctx, r)
 
-		err = writeResponse(logger, req, w, resp)
+		err = writeResponse(logger, w, resp)
 		if err != nil {
 			logger.Error("failed to write response", "err", err)
 		}
@@ -76,80 +76,66 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 }
 
 func toRequest(req *http.Request) (Request, error) {
-	r := Request{
+	var r struct {
+		Body        json.RawMessage `json:"body"`
+		Context     json.RawMessage `json:"context"`
+		AccessToken string          `json:"access_token"`
+		Method      string          `json:"method"`
+		Params      struct {
+			Header http.Header `json:"header"`
+			Query  url.Values  `json:"query"`
+		} `json:"params"`
+		URL string `json:"url"`
+	}
+	payload, err := io.ReadAll(io.LimitReader(req.Body, 5*mb))
+	if err != nil {
+		return Request{}, fmt.Errorf("failed to read request body: %s", err)
+	}
+
+	if err = json.Unmarshal(payload, &r); err != nil {
+		return Request{}, fmt.Errorf("failed to unmarshal request body: %s", err)
+	}
+
+	// Ensure headers are canonically formatted else header.Get("my-key") won't necessarily work.
+	hCanon := make(http.Header)
+	for k, v := range r.Params.Header {
+		for _, s := range v {
+			hCanon.Add(k, s)
+		}
+	}
+	r.Params.Header = hCanon
+
+	out := Request{
+		Body:    r.Body,
+		Context: r.Context,
 		Params: struct {
 			Header http.Header
 			Query  url.Values
-		}{
-			Header: req.Header,
-			Query:  req.URL.Query(),
-		},
-		URL:    req.URL.Path,
-		Method: req.Method,
+		}{Header: r.Params.Header, Query: r.Params.Query},
+		URL:         r.URL,
+		Method:      r.Method,
+		AccessToken: r.AccessToken,
 	}
-	if req.Body != nil {
-		body, err := io.ReadAll(io.LimitReader(req.Body, 5*mb))
-		if err != nil {
-			return Request{}, err
-		}
-		if len(body) > 0 {
-			r.Body = body
-
-			var ctxPayload struct {
-				Context json.RawMessage `json:"context"`
-			}
-			_ = json.Unmarshal(body, &ctxPayload)
-			r.Context = ctxPayload.Context
-		}
-	}
-
-	return r, nil
+	return out, nil
 }
 
-func addReqHeaders(reqH, respH http.Header) http.Header {
-	if respH == nil {
-		respH = make(http.Header, 3)
-	}
-	takeHeaders(reqH, respH, headerExecID, headerOrigin, headerTraceID)
-	return respH
-}
-
-func takeHeaders(reqH, respH http.Header, headers ...string) {
-	for _, header := range headers {
-		if v := reqH.Get(header); v != "" {
-			respH.Set(header, v)
-		}
-	}
-}
-
-func writeResponse(logger *slog.Logger, req *http.Request, w http.ResponseWriter, resp Response) error {
-	for name, vals := range addReqHeaders(req.Header, resp.Header) {
-		for _, v := range vals {
-			w.Header().Set(name, v)
-		}
-	}
-
+func writeResponse(logger *slog.Logger, w http.ResponseWriter, resp Response) error {
 	b, err := json.Marshal(struct {
-		Errors []APIError     `json:"errors"`
-		Body   json.Marshaler `json:"body"`
+		Body    json.Marshaler `json:"body,omitempty"`
+		Code    int            `json:"code,omitempty"`
+		Errors  []APIError     `json:"errors"`
+		Headers http.Header    `json:"headers,omitempty"`
 	}{
-		Errors: resp.Errors,
-		Body:   resp.Body,
+		Body:    resp.Body,
+		Code:    resp.StatusCode(),
+		Errors:  resp.Errors,
+		Headers: resp.Header,
 	})
 	if err != nil {
 		logger.Error("failed to marshal json payload with body", "err", err)
-		b, err = json.Marshal(struct {
-			Errors []APIError `json:"errors"`
-		}{
-			Errors: append(resp.Errors, APIError{Code: http.StatusInternalServerError, Message: err.Error()}),
-		})
-		if err != nil {
-			logger.Error("failed to marshal json error payload", "err", err)
-		}
 	}
-
-	if resp.StatusCode() > 0 {
-		w.WriteHeader(resp.StatusCode())
+	if len(b) == 0 {
+		return nil
 	}
 
 	_, err = w.Write(b)
