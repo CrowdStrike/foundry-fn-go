@@ -108,8 +108,8 @@ A basic HTTP server will be listening on port 8081.
 # build the project which uses the sdk
 cd my-project && go mod tidy && go build -o run_me .
 
-# run the executable
-./run_me
+# run the executable. config should be in json format here.
+CS_FN_CONFIG_PATH=$PATH_TO_CONFIG_JSON ./run_me
 ```
 
 Requests can now be made against the executable.
