@@ -115,9 +115,15 @@ CS_FN_CONFIG_PATH=$PATH_TO_CONFIG_JSON ./run_me
 Requests can now be made against the executable.
 
 ```shell
-curl -X POST http://localhost:8081/echo \
+curl -X POST http://localhost:8081/ \
   -H "Content-Type: application/json" \
-  --data '{"foo": "bar"}'
+  --data '{
+    "body": {
+        "foo": "bar"
+    },
+    "method": "POST",
+    "url": "/greetings"
+}'
 ```
 
 ## Convenience Functionality 🧰
