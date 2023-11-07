@@ -71,7 +71,6 @@ func (m *Mux) Put(route string, h Handler) {
 }
 
 func (m *Mux) registerRoute(method, route string, h Handler) {
-	// TODO(berg): add additional checks for validity of method/route pairs
 	if route == "" {
 		panic("route must be provided")
 	}

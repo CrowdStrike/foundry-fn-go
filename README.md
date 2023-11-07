@@ -169,6 +169,74 @@ func newHandler(_ context.Context, cfg config) fdk.Handler {
 
 ---
 
+## Working with Request and Response Schemas
+
+Within the fdktest pkg, we maintain test funcs for validating a schema and its integration
+with a handler. Example:
+
+```go
+package somefn_test
+
+import (
+   "context"
+   "net/http"
+   "testing"
+
+   fdk "github.com/CrowdStrike/foundry-fn-go"
+   "github.com/CrowdStrike/foundry-fn-go/fdktest"
+)
+
+func TestHandlerIntegration(t *testing.T) {
+   reqSchema := `{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "postalCode": {
+      "type": "string",
+      "description": "The person's first name.",
+      "pattern": "\\d{5}"
+    },
+    "optional": {
+      "type": "string",
+      "description": "The person's last name."
+    }
+  },
+  "required": [
+    "postalCode"
+  ]
+}`
+
+   respSchema := `{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "foo": {
+      "type": "string",
+      "description": "The person's first name.",
+      "enum": ["bar"]
+    }
+  },
+  "required": [
+    "foo"
+  ]
+}`
+   handler := fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
+      return fdk.Response{Body: fdk.JSON(map[string]string{"foo": "bar"})}
+   })
+
+   req := fdk.Request{
+      URL:    "/",
+      Method: http.MethodPost,
+      Body:   json.RawMessage(`{"postalCode": "55755"}`),
+   }
+
+   err := fdktest.HandlerSchemaOK(handler, req, reqSchema, respSchema)
+   if err != nil {
+      t.Fatal("unexpected err: ", err)
+   }
+}
+
+```
 
 <p align="center"><img src="https://raw.githubusercontent.com/CrowdStrike/falconpy/main/docs/asset/cs-logo-footer.png"><BR/><img width="250px" src="https://raw.githubusercontent.com/CrowdStrike/falconpy/main/docs/asset/adversary-red-eyes.png"></P>
 <h3><P align="center">WE STOP BREACHES</P></h3>
