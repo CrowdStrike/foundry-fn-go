@@ -2,7 +2,10 @@ module github.com/CrowdStrike/foundry-fn-go
 
 go 1.21
 
-require github.com/crowdstrike/gofalcon v0.4.2
+require (
+	github.com/crowdstrike/gofalcon v0.4.2
+	github.com/xeipuuv/gojsonschema v1.2.0
+)
 
 require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
@@ -26,6 +29,8 @@ require (
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
+	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	go.mongodb.org/mongo-driver v1.11.3 // indirect
 	go.opentelemetry.io/otel v1.14.0 // indirect
 	go.opentelemetry.io/otel/trace v1.14.0 // indirect

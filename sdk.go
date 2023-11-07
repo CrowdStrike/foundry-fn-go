@@ -27,14 +27,6 @@ func Fn() struct {
 }
 
 // Handler provides a handler for our incoming request.
-//
-// TODO(berg): I'm a little confused why we have a response, with APIErrors, and
-// a go type error being returned in the legacy sdks. This creates
-// multiple ways to do the same thing. I'd be confused, as I am now
-// I suppose, with what goes where. If we remove the error from the
-// return tuple, the only place for errors now is in the Response type.
-// I think this makes good sense. Lets not create a failure condition
-// from something that could be in user space.
 type Handler interface {
 	Handle(ctx context.Context, r Request) Response
 }
