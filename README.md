@@ -89,13 +89,14 @@ func (c config) OK() error {
     5. `Context`: Caller-supplied raw context.
     6. `AccessToken`: Caller-supplied access token.
 3. `Response`
-   1. The `Response` contains fields `Body` (the payload of the response), `Code` (an HTTP status code),
-      `Errors` (a slice of `APIError`s), and `Headers` (a map of any special HTTP headers which should be present on
-      the response).
+    1. The `Response` contains fields `Body` (the payload of the response), `Code` (an HTTP status code),
+       `Errors` (a slice of `APIError`s), and `Headers` (a map of any special HTTP headers which should be present on
+       the response).
 4. `main()`: Initialization and bootstrap logic all contained with fdk.Run and handler constructor.
 
 more examples can be found at:
-* [fn with config](examples/fn_config) 
+
+* [fn with config](examples/fn_config)
 * [fn without config](examples/fn_no_config)
 * [more complex/complete example](examples/complex)
 
@@ -167,7 +168,44 @@ func newHandler(_ context.Context, cfg config) fdk.Handler {
 // omitting rest of implementation
 ```
 
----
+## Integration with Falcon Fusion workflows
+
+When integrating with a Falcon Fusion workflow, the `Request.Context` can be decoded into
+`WorkflowCtx` type. You may json unmarshal into that type. The type provides some additional
+context from the workflow. This context is from the execution of the workflow, and may be
+dynamic in some usecases. To simplify things further for authors, we have introduced two
+handler functions to remove the boilerplate of dealing with a workflow.
+
+```go
+package somefn
+
+import (
+	"context"
+
+	fdk "github.com/CrowdStrike/foundry-fn-go"
+)
+
+type reqBody struct {
+	Foo string `json:"foo"`
+}
+
+func New(ctx context.Context, _ fdk.SkipCfg) fdk.Handler {
+	m := fdk.NewMux()
+
+	// for get/delete reqs use HandleWorkflow. The path is just an examples, any payh can be used.
+	m.Get("/workflow", fdk.HandleWorkflow(func(ctx context.Context, r fdk.Request, workflowCtx fdk.WorkflowCtx) fdk.Response {
+		// ... trim impl
+	}))
+
+	// for handlers that expect a request body (i.e. PATCH/POST/PUT)
+	m.Post("/workflow", fdk.HandleWorkflowOf(func(ctx context.Context, r fdk.RequestOf[reqBody], workflowCtx fdk.WorkflowCtx) fdk.Response {
+		// .. trim imple
+	}))
+
+	return m
+}
+
+```
 
 ## Working with Request and Response Schemas
 
@@ -178,16 +216,16 @@ with a handler. Example:
 package somefn_test
 
 import (
-   "context"
-   "net/http"
-   "testing"
+	"context"
+	"net/http"
+	"testing"
 
-   fdk "github.com/CrowdStrike/foundry-fn-go"
-   "github.com/CrowdStrike/foundry-fn-go/fdktest"
+	fdk "github.com/CrowdStrike/foundry-fn-go"
+	"github.com/CrowdStrike/foundry-fn-go/fdktest"
 )
 
 func TestHandlerIntegration(t *testing.T) {
-   reqSchema := `{
+	reqSchema := `{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -206,7 +244,7 @@ func TestHandlerIntegration(t *testing.T) {
   ]
 }`
 
-   respSchema := `{
+	respSchema := `{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
@@ -220,23 +258,25 @@ func TestHandlerIntegration(t *testing.T) {
     "foo"
   ]
 }`
-   handler := fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
-      return fdk.Response{Body: fdk.JSON(map[string]string{"foo": "bar"})}
-   })
+	handler := fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
+		return fdk.Response{Body: fdk.JSON(map[string]string{"foo": "bar"})}
+	})
 
-   req := fdk.Request{
-      URL:    "/",
-      Method: http.MethodPost,
-      Body:   json.RawMessage(`{"postalCode": "55755"}`),
-   }
+	req := fdk.Request{
+		URL:    "/",
+		Method: http.MethodPost,
+		Body:   json.RawMessage(`{"postalCode": "55755"}`),
+	}
 
-   err := fdktest.HandlerSchemaOK(handler, req, reqSchema, respSchema)
-   if err != nil {
-      t.Fatal("unexpected err: ", err)
-   }
+	err := fdktest.HandlerSchemaOK(handler, req, reqSchema, respSchema)
+	if err != nil {
+		t.Fatal("unexpected err: ", err)
+	}
 }
 
 ```
+
+---
 
 <p align="center"><img src="https://raw.githubusercontent.com/CrowdStrike/falconpy/main/docs/asset/cs-logo-footer.png"><BR/><img width="250px" src="https://raw.githubusercontent.com/CrowdStrike/falconpy/main/docs/asset/adversary-red-eyes.png"></P>
 <h3><P align="center">WE STOP BREACHES</P></h3>

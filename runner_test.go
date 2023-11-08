@@ -456,6 +456,155 @@ func TestRun_httprunner(t *testing.T) {
 			t.Run(tt.name, fn)
 		}
 	})
+
+	t.Run("when executing with workflow integration", func(t *testing.T) {
+		type (
+			inputs struct {
+				body    []byte
+				context []byte
+				method  string
+				path    string
+			}
+
+			wantFn func(t *testing.T, resp *http.Response, status int, workflowCtx fdk.WorkflowCtx, errs []fdk.APIError)
+		)
+
+		tests := []struct {
+			name         string
+			inputs       inputs
+			newHandlerFn func(ctx context.Context, cfg fdk.SkipCfg) fdk.Handler
+			want         wantFn
+		}{
+			{
+				name: "with workflow integration and GET request should pass",
+				inputs: inputs{
+					context: []byte(`{"app_id":"aPp1","cid":"ciD1"}`),
+					method:  "GET",
+					path:    "/workflow",
+				},
+				newHandlerFn: func(ctx context.Context, cfg fdk.SkipCfg) fdk.Handler {
+					m := fdk.NewMux()
+					m.Get("/workflow", fdk.HandleWorkflow(func(ctx context.Context, r fdk.Request, workflowCtx fdk.WorkflowCtx) fdk.Response {
+						return fdk.Response{
+							Code: 202,
+							Body: fdk.JSON(workflowCtx),
+						}
+					}))
+					return m
+				},
+				want: func(t *testing.T, resp *http.Response, code int, workflowCtx fdk.WorkflowCtx, errs []fdk.APIError) {
+					equalVals(t, 202, resp.StatusCode)
+					equalVals(t, 202, code)
+
+					if len(errs) > 0 {
+						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", errs)
+					}
+
+					want := fdk.WorkflowCtx{AppID: "aPp1", CID: "ciD1"}
+					if want != workflowCtx {
+						t.Errorf("workflow contexts to not match:\n\t\twant: %#v\n\t\tgot: %#v", want, workflowCtx)
+					}
+				},
+			},
+			{
+				name: "with workflow integration and POST request should pass",
+				inputs: inputs{
+					body:    []byte(`{"dodgers":"stink"}`),
+					context: []byte(`{"app_id":"aPp1","cid":"ciD1"}`),
+					method:  "POST",
+					path:    "/workflow",
+				},
+				newHandlerFn: func(ctx context.Context, cfg fdk.SkipCfg) fdk.Handler {
+					m := fdk.NewMux()
+					m.Post("/workflow", fdk.HandleWorkflowOf(func(ctx context.Context, r fdk.RequestOf[reqBodyDodgers], workflowCtx fdk.WorkflowCtx) fdk.Response {
+						workflowCtx.CID += "-" + r.Body.Dodgers
+						return fdk.Response{
+							Code: 202,
+							Body: fdk.JSON(workflowCtx),
+						}
+					}))
+					return m
+				},
+				want: func(t *testing.T, resp *http.Response, code int, workflowCtx fdk.WorkflowCtx, errs []fdk.APIError) {
+					equalVals(t, 202, resp.StatusCode)
+					equalVals(t, 202, code)
+
+					if len(errs) > 0 {
+						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", errs)
+					}
+
+					want := fdk.WorkflowCtx{AppID: "aPp1", CID: "ciD1-stink"}
+					if want != workflowCtx {
+						t.Errorf("workflow contexts to not match:\n\t\twant: %#v\n\t\tgot: %#v", want, workflowCtx)
+					}
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			fn := func(t *testing.T) {
+				port := newIP(t)
+				t.Setenv("PORT", port)
+
+				readyChan := make(chan struct{})
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					fdk.Run(ctx, func(ctx context.Context, cfg fdk.SkipCfg) fdk.Handler {
+						h := tt.newHandlerFn(ctx, cfg)
+						close(readyChan)
+						return h
+					})
+				}()
+
+				select {
+				case <-readyChan:
+				case <-time.After(50 * time.Millisecond):
+				}
+
+				body := struct {
+					Body    json.RawMessage `json:"body"`
+					Context json.RawMessage `json:"context"`
+					Method  string          `json:"method"`
+					URL     string          `json:"url"`
+				}{
+					Body:    tt.inputs.body,
+					URL:     tt.inputs.path,
+					Method:  tt.inputs.method,
+					Context: tt.inputs.context,
+				}
+
+				b, err := json.Marshal(body)
+				mustNoErr(t, err)
+
+				req, err := http.NewRequestWithContext(
+					ctx,
+					http.MethodPost,
+					"http://localhost:"+port,
+					bytes.NewBuffer(b),
+				)
+				mustNoErr(t, err)
+
+				resp, err := http.DefaultClient.Do(req)
+				mustNoErr(t, err)
+				cancel()
+				defer func() { _ = resp.Body.Close() }()
+
+				var got struct {
+					Code        int             `json:"code"`
+					Errs        []fdk.APIError  `json:"errors"`
+					WorkflowCtx fdk.WorkflowCtx `json:"body"`
+				}
+				decodeBody(t, resp.Body, &got)
+
+				tt.want(t, resp, got.Code, got.WorkflowCtx, got.Errs)
+			}
+			t.Run(tt.name, fn)
+		}
+	})
 }
 
 type config struct {
@@ -497,6 +646,10 @@ type (
 		Path        string          `json:"path"`
 		Method      string          `json:"method"`
 		AccessToken string          `json:"access_token"`
+	}
+
+	reqBodyDodgers struct {
+		Dodgers string `json:"dodgers"`
 	}
 )
 
