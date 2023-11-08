@@ -60,6 +60,38 @@ func HandleFnOf[T any](fn func(context.Context, RequestOf[T]) Response) Handler 
 	})
 }
 
+// WorkflowCtx is the Request.Context field when integrating a function with Falcon Fusion workflow.
+type WorkflowCtx struct {
+	AppID string `json:"app_id"`
+	CID   string `json:"cid"`
+}
+
+// HandleWorkflow provides a means to create a handler with workflow integration. This function
+// does not have an opinion on the request body but does expect a workflow integration. Typically,
+// this is useful for DELETE/GET handlers.
+func HandleWorkflow(fn func(context.Context, Request, WorkflowCtx) Response) Handler {
+	return HandlerFn(func(ctx context.Context, r Request) Response {
+		var w WorkflowCtx
+		if err := json.Unmarshal(r.Context, &w); err != nil {
+			return Response{Errors: []APIError{{Code: http.StatusBadRequest, Message: "failed to unmarshal workflow context: " + err.Error()}}}
+		}
+
+		return fn(ctx, r, w)
+	})
+}
+
+// HandleWorkflowOf provides a means to create a handler with Workflow integration. This
+// function is useful when you expect a request body and have workflow integrations. Typically, this
+// is with PATCH/POST/PUT handlers.
+func HandleWorkflowOf[T any](fn func(context.Context, RequestOf[T], WorkflowCtx) Response) Handler {
+	return HandleWorkflow(func(ctx context.Context, r Request, workflowCtx WorkflowCtx) Response {
+		next := HandleFnOf(func(ctx context.Context, r RequestOf[T]) Response {
+			return fn(ctx, r, workflowCtx)
+		})
+		return next.Handle(ctx, r)
+	})
+}
+
 type (
 	// Request defines a request structure that is given to the runner. The Body is set to
 	// json.RawMessage, to enable decoration/middleware.
@@ -67,15 +99,12 @@ type (
 
 	// RequestOf provides a generic body we can target our unmarshaling into.
 	RequestOf[T any] struct {
-		Body T
-		// TODO(berg): can we axe Context? have workflow put details in the body/headers/params instead?
+		Body    T
 		Context json.RawMessage
 		Params  struct {
 			Header http.Header
 			Query  url.Values
 		}
-		// TODO(berg): explore changing this field to Path, as URL is misleading. It's never
-		// 			   an fqdn, only the path of the url.
 		URL         string
 		Method      string
 		AccessToken string
