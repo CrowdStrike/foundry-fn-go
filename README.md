@@ -276,6 +276,45 @@ func TestHandlerIntegration(t *testing.T) {
 
 ```
 
+### A note on `os.Exit`
+
+Please refrain from using `os.Exit`. When an error is encountered, we want to return a message
+to the caller. Otherwise, it'll `os.Exit` and all stakeholders will have no idea what to make
+of it. Instead, use something like the following in `fdk.Run`:
+
+```go
+// sdk.go
+
+package fdk
+
+import (
+	"context"
+)
+
+// Run is the meat and potatoes. This is the entrypoint for everything.
+func Run[T Cfg](ctx context.Context, newHandlerFn func(_ context.Context, cfg T) Handler) {
+	// ... trim
+
+	cfg, loadErr := readCfg[T](ctx)
+	if loadErr != nil {
+		if loadErr.err != nil {
+			// these being specific to the author's eyes only
+			logger.Error("failed to load config", "err", loadErr.err)
+		}
+		// here we return a useful error to the caller of the function
+		run(ctx, logger, ErrHandler(loadErr.apiErr))
+		return
+	}
+
+	h := newHandlerFn(ctx, cfg)
+
+	run(ctx, logger, h)
+
+	return
+}
+
+```
+
 ---
 
 <p align="center"><img src="https://raw.githubusercontent.com/CrowdStrike/falconpy/main/docs/asset/cs-logo-footer.png"><BR/><img width="250px" src="https://raw.githubusercontent.com/CrowdStrike/falconpy/main/docs/asset/adversary-red-eyes.png"></P>

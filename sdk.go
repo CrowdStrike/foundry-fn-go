@@ -142,7 +142,7 @@ func (r Response) StatusCode() int {
 
 // Run is the meat and potatoes. This is the entrypoint for everything.
 func Run[T Cfg](ctx context.Context, newHandlerFn func(_ context.Context, cfg T) Handler) {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true}))
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{}))
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -160,12 +160,10 @@ func Run[T Cfg](ctx context.Context, newHandlerFn func(_ context.Context, cfg T)
 
 	cfg, loadErr := readCfg[T](ctx)
 	if loadErr != nil {
-		run(ctx, logger, HandlerFn(func(ctx context.Context, r Request) Response {
-			if loadErr.err != nil {
-				logger.Error("failed to load config", "err", loadErr.err)
-			}
-			return Response{Errors: []APIError{loadErr.apiErr}}
-		}))
+		if loadErr.err != nil {
+			logger.Error("failed to load config", "err", loadErr.err)
+		}
+		run(ctx, logger, ErrHandler(loadErr.apiErr))
 		return
 	}
 
