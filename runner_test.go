@@ -374,6 +374,40 @@ func TestRun_httprunner(t *testing.T) {
 					equalVals(t, wantErr, got.Errs[0])
 				},
 			},
+			{
+				name: "encountering errors in new handler will return highest error code",
+				inputs: inputs{
+					config: `{"string": "val","integer": 1,"err":true}`,
+					body:   []byte(`{"should":"ignore"}`),
+					method: "POST",
+					path:   "/path",
+				},
+				newHandlerFn: func(ctx context.Context, cfg config) fdk.Handler {
+					return fdk.ErrHandler(
+						fdk.APIError{Code: 500, Message: "internal server error"},
+						fdk.APIError{Code: 501, Message: "even higher"},
+						fdk.APIError{Code: 400, Message: "some user error"},
+					)
+				},
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					equalVals(t, 501, resp.StatusCode)
+					equalVals(t, 501, got.Code)
+
+					if len(got.Errs) != 3 {
+						t.Fatalf("did not received expected number of errors\n\t\twant:\t3 error\n\t\tgot:\t%+v", got.Errs)
+					}
+
+					wantErrs := []fdk.APIError{
+						{Code: 500, Message: "internal server error"},
+						{Code: 501, Message: "even higher"},
+						{Code: 400, Message: "some user error"},
+					}
+					equalVals(t, len(wantErrs), len(got.Errs))
+					for i, want := range wantErrs {
+						equalVals(t, want, got.Errs[i])
+					}
+				},
+			},
 		}
 
 		for _, tt := range tests {
