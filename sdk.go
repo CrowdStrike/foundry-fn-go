@@ -131,7 +131,9 @@ func (r Response) StatusCode() int {
 	code := r.Code
 	if code == 0 && len(r.Errors) > 0 {
 		for _, e := range r.Errors {
-			code = e.Code
+			if e.Code > code {
+				code = e.Code
+			}
 		}
 	}
 	if code == 0 {
