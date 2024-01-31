@@ -2,9 +2,13 @@ package fdk
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+
+	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -50,9 +54,22 @@ var configReaders = map[string]ConfigLoader{
 type localCfgLoader struct{}
 
 func (*localCfgLoader) LoadConfig(ctx context.Context) ([]byte, error) {
-	b, err := os.ReadFile(os.Getenv("CS_FN_CONFIG_PATH"))
+	file := os.Getenv("CS_FN_CONFIG_PATH")
+	b, err := os.ReadFile(file)
 	if os.IsNotExist(err) {
 		return nil, ErrCfgNotFound
 	}
-	return b, err
+	if err != nil {
+		return nil, err
+	}
+
+	if ext := filepath.Ext(file); ext == ".yaml" || ext == ".yml" {
+		var out map[string]any
+		if err := yaml.Unmarshal(b, &out); err != nil {
+			return nil, fmt.Errorf("failed to read yaml config: %w", err)
+		}
+		return json.Marshal(out)
+	}
+
+	return b, nil
 }

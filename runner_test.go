@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -28,6 +27,7 @@ func TestRun_httprunner(t *testing.T) {
 				accessToken string
 				body        []byte
 				config      string
+				configFile  string
 				context     []byte
 				headers     http.Header
 				method      string
@@ -48,6 +48,92 @@ func TestRun_httprunner(t *testing.T) {
 				name: "simple DELETE request should pass",
 				inputs: inputs{
 					config: `{"string": "val","integer": 1}`,
+					headers: http.Header{
+						"X-Cs-Origin":      []string{"fooorigin"},
+						"X-Cs-Executionid": []string{"exec_id"},
+						"X-Cs-Traceid":     []string{"trace_id"},
+					},
+					method:      "DELETE",
+					path:        "/path",
+					queryParams: url.Values{"ids": []string{"id1"}},
+				},
+				newHandlerFn: func(ctx context.Context, cfg config) fdk.Handler {
+					m := fdk.NewMux()
+					m.Delete("/path", newSimpleHandler(cfg))
+					return m
+				},
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					equalVals(t, 201, resp.StatusCode)
+					equalVals(t, 201, got.Code)
+
+					if len(got.Errs) > 0 {
+						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
+					}
+
+					echo := got.Req
+					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
+
+					equalVals(t, "/path", echo.Req.Path)
+					equalVals(t, "DELETE", echo.Req.Method)
+					equalVals(t, "id1", echo.Req.Queries.Get("ids"))
+
+					wantHeaders := make(http.Header)
+					wantHeaders.Set("X-Cs-Origin", "fooorigin")
+					wantHeaders.Set("X-Cs-Executionid", "exec_id")
+					wantHeaders.Set("X-Cs-Traceid", "trace_id")
+					containsHeaders(t, wantHeaders, echo.Req.Headers)
+				},
+			},
+			{
+				name: "simple DELETE request with yaml config should pass",
+				inputs: inputs{
+					config: `
+string: val
+integer: 1`,
+					configFile: "config.yaml",
+					headers: http.Header{
+						"X-Cs-Origin":      []string{"fooorigin"},
+						"X-Cs-Executionid": []string{"exec_id"},
+						"X-Cs-Traceid":     []string{"trace_id"},
+					},
+					method:      "DELETE",
+					path:        "/path",
+					queryParams: url.Values{"ids": []string{"id1"}},
+				},
+				newHandlerFn: func(ctx context.Context, cfg config) fdk.Handler {
+					m := fdk.NewMux()
+					m.Delete("/path", newSimpleHandler(cfg))
+					return m
+				},
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					equalVals(t, 201, resp.StatusCode)
+					equalVals(t, 201, got.Code)
+
+					if len(got.Errs) > 0 {
+						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
+					}
+
+					echo := got.Req
+					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
+
+					equalVals(t, "/path", echo.Req.Path)
+					equalVals(t, "DELETE", echo.Req.Method)
+					equalVals(t, "id1", echo.Req.Queries.Get("ids"))
+
+					wantHeaders := make(http.Header)
+					wantHeaders.Set("X-Cs-Origin", "fooorigin")
+					wantHeaders.Set("X-Cs-Executionid", "exec_id")
+					wantHeaders.Set("X-Cs-Traceid", "trace_id")
+					containsHeaders(t, wantHeaders, echo.Req.Headers)
+				},
+			},
+			{
+				name: "simple DELETE request with yml config should pass",
+				inputs: inputs{
+					config: `
+string: val
+integer: 1`,
+					configFile: "config.yml",
 					headers: http.Header{
 						"X-Cs-Origin":      []string{"fooorigin"},
 						"X-Cs-Executionid": []string{"exec_id"},
@@ -413,7 +499,11 @@ func TestRun_httprunner(t *testing.T) {
 		for _, tt := range tests {
 			fn := func(t *testing.T) {
 				if tt.inputs.config != "" {
-					tmp := filepath.Join(t.TempDir(), "config.json")
+					cfgFile := tt.inputs.configFile
+					if cfgFile == "" {
+						cfgFile = "config.json"
+					}
+					tmp := filepath.Join(t.TempDir(), cfgFile)
 					t.Setenv("CS_FN_CONFIG_PATH", tmp)
 
 					err := os.WriteFile(tmp, []byte(tt.inputs.config), 0666)
@@ -773,7 +863,6 @@ func decodeBody(t testing.TB, r io.Reader, v any) {
 	if err != nil {
 		t.Fatal("failed to read: " + err.Error())
 	}
-	fmt.Println("body: ", string(b))
 
 	err = json.Unmarshal(b, v)
 	if err != nil {
