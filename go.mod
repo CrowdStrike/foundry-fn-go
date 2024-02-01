@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/crowdstrike/gofalcon v0.4.2
 	github.com/xeipuuv/gojsonschema v1.2.0
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -39,6 +40,5 @@ require (
 	golang.org/x/sys v0.11.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
