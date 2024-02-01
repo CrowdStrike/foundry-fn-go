@@ -3,6 +3,7 @@ package fdk
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -109,13 +110,18 @@ type (
 		Method      string
 		AccessToken string
 	}
-
-	// APIError defines a error that is shared back to the caller.
-	APIError struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-	}
 )
+
+// APIError defines a error that is shared back to the caller.
+type APIError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+// Error provides a human readable error message.
+func (a APIError) Error() string {
+	return fmt.Sprintf("[%d] %s", a.Code, a.Message)
+}
 
 // Response is the domain type for the response.
 type Response struct {
