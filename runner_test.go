@@ -33,6 +33,7 @@ func TestRun_httprunner(t *testing.T) {
 				method      string
 				path        string
 				queryParams url.Values
+				traceID     string
 			}
 
 			wantFn func(t *testing.T, resp *http.Response, got respBody)
@@ -56,6 +57,7 @@ func TestRun_httprunner(t *testing.T) {
 					method:      "DELETE",
 					path:        "/path",
 					queryParams: url.Values{"ids": []string{"id1"}},
+					traceID:     "trace1",
 				},
 				newHandlerFn: func(ctx context.Context, cfg config) fdk.Handler {
 					m := fdk.NewMux()
@@ -76,6 +78,8 @@ func TestRun_httprunner(t *testing.T) {
 					equalVals(t, "/path", echo.Req.Path)
 					equalVals(t, "DELETE", echo.Req.Method)
 					equalVals(t, "id1", echo.Req.Queries.Get("ids"))
+					equalVals(t, "trace1", echo.Req.TraceID)
+					equalVals(t, "trace1", echo.Req.TraceIDCtx)
 
 					wantHeaders := make(http.Header)
 					wantHeaders.Set("X-Cs-Origin", "fooorigin")
@@ -540,7 +544,8 @@ integer: 1`,
 						Header http.Header `json:"header"`
 						Query  url.Values  `json:"query"`
 					} `json:"params"`
-					URL string `json:"url"`
+					URL     string `json:"url"`
+					TraceID string `json:"trace_id"`
 				}{
 					Body: tt.inputs.body,
 					Params: struct {
@@ -554,6 +559,7 @@ integer: 1`,
 					Method:      tt.inputs.method,
 					Context:     tt.inputs.context,
 					AccessToken: tt.inputs.accessToken,
+					TraceID:     tt.inputs.traceID,
 				}
 
 				b, err := json.Marshal(body)
@@ -770,6 +776,8 @@ type (
 		Path        string          `json:"path"`
 		Method      string          `json:"method"`
 		AccessToken string          `json:"access_token"`
+		TraceID     string          `json:"trace_id"`
+		TraceIDCtx  string          `json:"trace_id_ctx"`
 	}
 
 	reqBodyDodgers struct {
@@ -785,7 +793,7 @@ func newSimpleHandler(cfg config) fdk.Handler {
 		})
 	}
 	return fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
-		return newEchoResp(cfg, r)
+		return newEchoResp(ctx, cfg, r)
 	})
 }
 
@@ -797,11 +805,12 @@ func newJSONBodyHandler(cfg config) fdk.Handler {
 		})
 	}
 	return fdk.HandleFnOf(func(ctx context.Context, r fdk.RequestOf[json.RawMessage]) fdk.Response {
-		return newEchoResp(cfg, fdk.Request(r))
+		return newEchoResp(ctx, cfg, fdk.Request(r))
 	})
 }
 
-func newEchoResp(cfg config, r fdk.Request) fdk.Response {
+func newEchoResp(ctx context.Context, cfg config, r fdk.Request) fdk.Response {
+	traceIDCtx, _ := ctx.Value("_traceid").(string)
 	return fdk.Response{
 		Body: fdk.JSON(echoReq{
 			Config: cfg,
@@ -813,6 +822,8 @@ func newEchoResp(cfg config, r fdk.Request) fdk.Response {
 				Path:        r.URL,
 				Method:      r.Method,
 				AccessToken: r.AccessToken,
+				TraceID:     r.TraceID,
+				TraceIDCtx:  traceIDCtx,
 			},
 		}),
 		Code:   201,

@@ -109,6 +109,7 @@ type (
 		URL         string
 		Method      string
 		AccessToken string
+		TraceID     string
 	}
 )
 

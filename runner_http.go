@@ -37,6 +37,9 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 			return
 		}
 
+		const ctxKeyTraceID = "_traceid" // purposefully untyped
+		ctx = context.WithValue(ctx, ctxKeyTraceID, r.TraceID)
+
 		resp := h.Handle(ctx, r)
 
 		err = writeResponse(logger, w, resp)
@@ -79,7 +82,8 @@ func toRequest(req *http.Request) (Request, error) {
 			Header http.Header `json:"header"`
 			Query  url.Values  `json:"query"`
 		} `json:"params"`
-		URL string `json:"url"`
+		URL     string `json:"url"`
+		TraceID string `json:"trace_id"`
 	}
 	payload, err := io.ReadAll(io.LimitReader(req.Body, 5*mb))
 	if err != nil {
@@ -106,8 +110,9 @@ func toRequest(req *http.Request) (Request, error) {
 			Header http.Header
 			Query  url.Values
 		}{Header: r.Params.Header, Query: r.Params.Query},
-		URL:         r.URL,
 		Method:      r.Method,
+		URL:         r.URL,
+		TraceID:     r.TraceID,
 		AccessToken: r.AccessToken,
 	}
 	return out, nil
