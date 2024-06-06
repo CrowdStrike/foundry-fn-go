@@ -131,29 +131,25 @@ curl -X POST http://localhost:8081/ \
 
 ### `gofalcon`
 
-Foundry Function Go ships with [gofalcon](https://github.com/CrowdStrike/gofalcon) pre-integrated and a convenience
-constructor.
-While it is not strictly necessary to use convenience function, it is recommended.
-
-**Important:** Create a new instance of the `gofalcon` client on each request.
+Foundry Function integrates with [gofalcon](https://github.com/CrowdStrike/gofalcon) in a few simple lines.
 
 ```go
 package main
 
 import (
 	"context"
-	"net/http"
 
-	/* omitting other imports */
-	fdk "github.com/crowdstrike/foundry-fn-go"
+    fdk "github.com/CrowdStrike/foundry-fn-go"
+	"github.com/CrowdStrike/gofalcon/falcon"
+	"github.com/CrowdStrike/gofalcon/falcon/client"
 )
 
 func newHandler(_ context.Context, cfg config) fdk.Handler {
 	mux := fdk.NewMux()
 	mux.Post("/echo", fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
-		client, err := fdk.FalconClient(ctx, request)
+		client, err := newFalconClient(ctx, r.AccessToken)
 		if err != nil {
-			if err == fdk.ErrFalconNoToken {
+			if err == falcon.ErrFalconNoToken {
 				// not a processable request
 				return fdk.Response{ /* snip */ }
 			}
@@ -165,7 +161,18 @@ func newHandler(_ context.Context, cfg config) fdk.Handler {
 	return mux
 }
 
+func newFalconClient(ctx context.Context, token string) (*client.CrowdStrikeAPISpecification, error) {
+	opts := fdk.FalconClientOpts()
+	return falcon.NewClient(&falcon.ApiConfig{
+		AccessToken:       token,
+		Cloud:             falcon.Cloud(opts.Cloud),
+		Context:           ctx,
+		UserAgentOverride: out.UserAgent,
+	})
+}
+
 // omitting rest of implementation
+
 ```
 
 ## Integration with Falcon Fusion workflows
