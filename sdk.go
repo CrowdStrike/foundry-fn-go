@@ -57,6 +57,7 @@ func HandleFnOf[T any](fn func(context.Context, RequestOf[T]) Response) Handler 
 			URL:         r.URL,
 			Method:      r.Method,
 			AccessToken: r.AccessToken,
+			TraceID:     r.TraceID,
 		})
 	})
 }
