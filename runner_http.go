@@ -37,6 +37,9 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 			return
 		}
 
+		const ctxKeyTraceID = "_traceid"
+		ctx = context.WithValue(ctx, ctxKeyTraceID, r.TraceID)
+
 		resp := h.Handle(ctx, r)
 
 		err = writeResponse(logger, w, resp)

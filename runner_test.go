@@ -79,6 +79,7 @@ func TestRun_httprunner(t *testing.T) {
 					equalVals(t, "DELETE", echo.Req.Method)
 					equalVals(t, "id1", echo.Req.Queries.Get("ids"))
 					equalVals(t, "trace1", echo.Req.TraceID)
+					equalVals(t, "trace1", echo.Req.CtxTraceID)
 
 					wantHeaders := make(http.Header)
 					wantHeaders.Set("X-Cs-Origin", "fooorigin")
@@ -776,6 +777,7 @@ type (
 		Method      string          `json:"method"`
 		AccessToken string          `json:"access_token"`
 		TraceID     string          `json:"trace_id"`
+		CtxTraceID  string          `json:"ctx_trace_id"`
 	}
 
 	reqBodyDodgers struct {
@@ -791,7 +793,7 @@ func newSimpleHandler(cfg config) fdk.Handler {
 		})
 	}
 	return fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
-		return newEchoResp(cfg, r)
+		return newEchoResp(ctx, cfg, r)
 	})
 }
 
@@ -803,11 +805,12 @@ func newJSONBodyHandler(cfg config) fdk.Handler {
 		})
 	}
 	return fdk.HandleFnOf(func(ctx context.Context, r fdk.RequestOf[json.RawMessage]) fdk.Response {
-		return newEchoResp(cfg, fdk.Request(r))
+		return newEchoResp(ctx, cfg, fdk.Request(r))
 	})
 }
 
-func newEchoResp(cfg config, r fdk.Request) fdk.Response {
+func newEchoResp(ctx context.Context, cfg config, r fdk.Request) fdk.Response {
+	traceID, _ := ctx.Value("_traceid").(string)
 	return fdk.Response{
 		Body: fdk.JSON(echoReq{
 			Config: cfg,
@@ -820,6 +823,7 @@ func newEchoResp(cfg config, r fdk.Request) fdk.Response {
 				Method:      r.Method,
 				AccessToken: r.AccessToken,
 				TraceID:     r.TraceID,
+				CtxTraceID:  traceID,
 			},
 		}),
 		Code:   201,
