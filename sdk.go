@@ -203,3 +203,11 @@ func ErrHandler(errs ...APIError) Handler {
 		return Response{Errors: errs}
 	})
 }
+
+// ErrResp creates a sad path errors only response.
+//
+// Note: the highest status code from the errors will be used for the response
+// status if no status code is set on the response.
+func ErrResp(errs ...APIError) Response {
+	return Response{Errors: errs}
+}
