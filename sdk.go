@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -197,10 +198,25 @@ func (j jsoned) MarshalJSON() ([]byte, error) {
 	return json.Marshal(j.v)
 }
 
-// ErrHandler creates a new handler to resopnd with only errors.
+// File represents a response that is a response body. The runner is in charge
+// of getting the contents to the destination. The metadata will be received.
+type File struct {
+	ContentType string        `json:"content_type"`
+	Encoding    string        `json:"encoding"`
+	Filename    string        `json:"filename"`
+	Contents    io.ReadSeeker `json:"-"`
+}
+
+// MarshalJSON marshals the file metadata.
+func (f File) MarshalJSON() ([]byte, error) {
+	type alias File
+	return json.Marshal(alias(f))
+}
+
+// ErrHandler creates a new handler to respond with only errors.
 func ErrHandler(errs ...APIError) Handler {
 	return HandlerFn(func(ctx context.Context, r Request) Response {
-		return Response{Errors: errs}
+		return ErrResp(errs...)
 	})
 }
 
@@ -209,5 +225,7 @@ func ErrHandler(errs ...APIError) Handler {
 // Note: the highest status code from the errors will be used for the response
 // status if no status code is set on the response.
 func ErrResp(errs ...APIError) Response {
-	return Response{Errors: errs}
+	resp := Response{Errors: errs}
+	resp.Code = resp.StatusCode()
+	return resp
 }

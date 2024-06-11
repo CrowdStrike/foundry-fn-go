@@ -28,9 +28,7 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 		r, err := toRequest(req)
 		if err != nil {
 			logger.Error("failed to create request", "err", err)
-			writeErr := writeResponse(logger, w, Response{
-				Errors: []APIError{{Code: http.StatusInternalServerError, Message: "unable to process incoming request"}},
-			})
+			writeErr := writeResponse(logger, w, ErrResp(APIError{Code: http.StatusInternalServerError, Message: "unable to process incoming request"}))
 			if writeErr != nil {
 				logger.Error("failed to write failed request response", "err", writeErr)
 			}
@@ -41,6 +39,19 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 		ctx = context.WithValue(ctx, ctxKeyTraceID, r.TraceID)
 
 		resp := h.Handle(ctx, r)
+
+		if f, ok := resp.Body.(File); ok {
+			err := writeFile(f.Contents, f.Filename)
+			if err != nil {
+				resp.Errors = append(resp.Errors, APIError{Code: http.StatusInternalServerError, Message: err.Error()})
+				writeErr := writeResponse(logger, w, resp)
+				if writeErr != nil {
+					logger.Error("failed to write failed request response", "write_err", writeErr, "err", err.Error())
+				}
+				return
+			}
+			f.Contents = nil
+		}
 
 		err = writeResponse(logger, w, resp)
 		if err != nil {
@@ -142,6 +153,26 @@ func writeResponse(logger *slog.Logger, w http.ResponseWriter, resp Response) er
 	}
 	_, err = w.Write(b)
 	return err
+}
+
+func writeFile(r io.Reader, filename string) error {
+	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer func() { _ = f.Close() }() // just in case
+
+	_, err = io.Copy(f, r)
+	if err != nil {
+		return fmt.Errorf("failed to write contents to file: %w", err)
+	}
+
+	err = f.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close file: %w", err)
+	}
+
+	return nil
 }
 
 func port() int {
