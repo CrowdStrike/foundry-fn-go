@@ -21,6 +21,19 @@ import (
 )
 
 func TestRun_httprunner(t *testing.T) {
+	type testReq struct {
+		AccessToken string          `json:"access_token"`
+		Body        json.RawMessage `json:"body"`
+		Context     json.RawMessage `json:"context"`
+		Method      string          `json:"method"`
+		Params      struct {
+			Header http.Header `json:"header"`
+			Query  url.Values  `json:"query"`
+		} `json:"params"`
+		URL     string `json:"url"`
+		TraceID string `json:"trace_id"`
+	}
+
 	t.Run("when executing provided handler with successful startup", func(t *testing.T) {
 		type (
 			inputs struct {
@@ -513,40 +526,15 @@ integer: 1`,
 					err := os.WriteFile(tmp, []byte(tt.inputs.config), 0666)
 					mustNoErr(t, err)
 				}
-				port := newIP(t)
-				t.Setenv("PORT", port)
 
-				readyChan := make(chan struct{})
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
-				done := make(chan struct{})
-				go func() {
-					defer close(done)
-					fdk.Run(ctx, func(ctx context.Context, cfg config) fdk.Handler {
-						h := tt.newHandlerFn(ctx, cfg)
-						close(readyChan)
-						return h
-					})
-				}()
+				addr := newServer(ctx, t, func(ctx context.Context, cfg config) fdk.Handler {
+					return tt.newHandlerFn(ctx, cfg)
+				})
 
-				select {
-				case <-readyChan:
-				case <-time.After(50 * time.Millisecond):
-				}
-
-				body := struct {
-					AccessToken string          `json:"access_token"`
-					Body        json.RawMessage `json:"body"`
-					Context     json.RawMessage `json:"context"`
-					Method      string          `json:"method"`
-					Params      struct {
-						Header http.Header `json:"header"`
-						Query  url.Values  `json:"query"`
-					} `json:"params"`
-					URL     string `json:"url"`
-					TraceID string `json:"trace_id"`
-				}{
+				body := testReq{
 					Body: tt.inputs.body,
 					Params: struct {
 						Header http.Header `json:"header"`
@@ -565,12 +553,7 @@ integer: 1`,
 				b, err := json.Marshal(body)
 				mustNoErr(t, err)
 
-				req, err := http.NewRequestWithContext(
-					ctx,
-					http.MethodPost,
-					"http://localhost:"+port,
-					bytes.NewBuffer(b),
-				)
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost, addr, bytes.NewBuffer(b))
 				mustNoErr(t, err)
 
 				resp, err := http.DefaultClient.Do(req)
@@ -673,34 +656,14 @@ integer: 1`,
 
 		for _, tt := range tests {
 			fn := func(t *testing.T) {
-				port := newIP(t)
-				t.Setenv("PORT", port)
-
-				readyChan := make(chan struct{})
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
-				done := make(chan struct{})
-				go func() {
-					defer close(done)
-					fdk.Run(ctx, func(ctx context.Context, cfg fdk.SkipCfg) fdk.Handler {
-						h := tt.newHandlerFn(ctx, cfg)
-						close(readyChan)
-						return h
-					})
-				}()
+				addr := newServer(ctx, t, func(ctx context.Context, cfg fdk.SkipCfg) fdk.Handler {
+					return tt.newHandlerFn(ctx, cfg)
+				})
 
-				select {
-				case <-readyChan:
-				case <-time.After(50 * time.Millisecond):
-				}
-
-				body := struct {
-					Body    json.RawMessage `json:"body"`
-					Context json.RawMessage `json:"context"`
-					Method  string          `json:"method"`
-					URL     string          `json:"url"`
-				}{
+				body := testReq{
 					Body:    tt.inputs.body,
 					URL:     tt.inputs.path,
 					Method:  tt.inputs.method,
@@ -710,12 +673,7 @@ integer: 1`,
 				b, err := json.Marshal(body)
 				mustNoErr(t, err)
 
-				req, err := http.NewRequestWithContext(
-					ctx,
-					http.MethodPost,
-					"http://localhost:"+port,
-					bytes.NewBuffer(b),
-				)
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost, addr, bytes.NewBuffer(b))
 				mustNoErr(t, err)
 
 				resp, err := http.DefaultClient.Do(req)
@@ -731,6 +689,131 @@ integer: 1`,
 				decodeBody(t, resp.Body, &got)
 
 				tt.want(t, resp, got.Code, got.WorkflowCtx, got.Errs)
+			}
+			t.Run(tt.name, fn)
+		}
+	})
+
+	t.Run("when executing handler with file response", func(t *testing.T) {
+		tmp := t.TempDir()
+
+		newReqBody := func(t *testing.T, r fileInReq) json.RawMessage {
+			t.Helper()
+			b, err := json.Marshal(r)
+			mustNoErr(t, err)
+			return b
+		}
+
+		type (
+			inputs struct {
+				body   json.RawMessage
+				method string
+				path   string
+			}
+
+			wantFn func(t *testing.T, resp *http.Response, got fdk.File)
+		)
+
+		tests := []struct {
+			name         string
+			input        inputs
+			newHandlerFn func(ctx context.Context) fdk.Handler
+			want         wantFn
+		}{
+			{
+				name: "POST to a endpoint that returns a sdk.File should pass",
+				input: inputs{
+					body: newReqBody(t, fileInReq{
+						ContentType:  "application/json",
+						DestFilename: filepath.Join(tmp, "first_file.json"),
+						V:            `{"some":"json"}`,
+					}),
+					method: "POST",
+					path:   "/file",
+				},
+				newHandlerFn: func(ctx context.Context) fdk.Handler {
+					m := fdk.NewMux()
+					m.Post("/file", fdk.HandleFnOf(newFileHandler))
+					return m
+				},
+				want: func(t *testing.T, resp *http.Response, got fdk.File) {
+					equalVals(t, 201, resp.StatusCode)
+
+					equalVals(t, "application/json", got.ContentType)
+					equalVals(t, "", got.Encoding)
+
+					wantFilename := filepath.Join(tmp, "first_file.json")
+					equalVals(t, wantFilename, got.Filename)
+					equalFiles(t, got.Filename, `{"some":"json"}`)
+				},
+			},
+			{
+				name: "POST to a endpoint that returns a sdk.File with encoding should pass",
+				input: inputs{
+					body: newReqBody(t, fileInReq{
+						ContentType: "application/json",
+						// requires file handler to implement the gzip compression, not enforced
+						// TODO(@berg): might make sense to add a middleware for compressing files that authors can utilize
+						Encoding:     "gzip",
+						DestFilename: filepath.Join(tmp, "second_file.json"),
+						V:            `{"dodgers":"stink"}`,
+					}),
+					method: "POST",
+					path:   "/file",
+				},
+				newHandlerFn: func(ctx context.Context) fdk.Handler {
+					m := fdk.NewMux()
+					m.Post("/file", fdk.HandleFnOf(newFileHandler))
+					return m
+				},
+				want: func(t *testing.T, resp *http.Response, got fdk.File) {
+					equalVals(t, 201, resp.StatusCode)
+
+					equalVals(t, "application/json", got.ContentType)
+					equalVals(t, "gzip", got.Encoding)
+
+					wantFilename := filepath.Join(tmp, "second_file.json")
+					equalVals(t, wantFilename, got.Filename)
+					equalFiles(t, got.Filename, `{"dodgers":"stink"}`)
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			fn := func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				addr := newServer(ctx, t, func(ctx context.Context, _ fdk.SkipCfg) fdk.Handler {
+					return tt.newHandlerFn(ctx)
+				})
+
+				reqBody := testReq{
+					Body:   tt.input.body,
+					Method: tt.input.method,
+					URL:    tt.input.path,
+				}
+
+				b, err := json.Marshal(reqBody)
+				mustNoErr(t, err)
+
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost, addr, bytes.NewBuffer(b))
+				mustNoErr(t, err)
+
+				resp, err := http.DefaultClient.Do(req)
+				mustNoErr(t, err)
+				cancel()
+				defer func() { _ = resp.Body.Close() }()
+
+				b, err = io.ReadAll(resp.Body)
+				mustNoErr(t, err)
+
+				var got struct {
+					File fdk.File `json:"body"`
+				}
+				mustNoErr(t, json.Unmarshal(b, &got))
+
+				tt.want(t, resp, got.File)
 			}
 			t.Run(tt.name, fn)
 		}
@@ -831,6 +914,25 @@ func newEchoResp(ctx context.Context, cfg config, r fdk.Request) fdk.Response {
 	}
 }
 
+type fileInReq struct {
+	ContentType  string `json:"content_type"`
+	DestFilename string `json:"destination_filename"`
+	Encoding     string `json:"encoding"`
+	V            string `json:"value"`
+}
+
+func newFileHandler(_ context.Context, r fdk.RequestOf[fileInReq]) fdk.Response {
+	return fdk.Response{
+		Code: 201,
+		Body: fdk.File{
+			ContentType: r.Body.ContentType,
+			Encoding:    r.Body.Encoding,
+			Filename:    r.Body.DestFilename,
+			Contents:    strings.NewReader(r.Body.V),
+		},
+	}
+}
+
 func equalVals[T comparable](t testing.TB, want, got T) bool {
 	t.Helper()
 
@@ -839,6 +941,15 @@ func equalVals[T comparable](t testing.TB, want, got T) bool {
 		t.Errorf("values not equal:\n\t\twant:\t%#v\n\t\tgot:\t%#v", want, got)
 	}
 	return match
+}
+
+func equalFiles(t testing.TB, filename string, want string) {
+	t.Helper()
+
+	b, err := os.ReadFile(filename)
+	mustNoErr(t, err)
+
+	equalVals(t, want, string(b))
 }
 
 func mustNoErr(t testing.TB, err error) {
@@ -879,6 +990,32 @@ func decodeBody(t testing.TB, r io.Reader, v any) {
 	if err != nil {
 		t.Fatalf("failed to unmarshal json: %s\n\t\tpayload:\t%s", err, string(b))
 	}
+}
+
+func newServer[CFG fdk.Cfg](ctx context.Context, t *testing.T, newHandlerFn func(context.Context, CFG) fdk.Handler) string {
+	t.Helper()
+
+	port := newIP(t)
+	t.Setenv("PORT", port)
+
+	readyChan := make(chan struct{})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fdk.Run(ctx, func(ctx context.Context, cfg CFG) fdk.Handler {
+			h := newHandlerFn(ctx, cfg)
+			close(readyChan)
+			return h
+		})
+	}()
+
+	select {
+	case <-readyChan:
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	return "http://localhost:" + port
 }
 
 func newIP(t *testing.T) string {
