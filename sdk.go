@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -196,21 +195,6 @@ type jsoned struct {
 
 func (j jsoned) MarshalJSON() ([]byte, error) {
 	return json.Marshal(j.v)
-}
-
-// File represents a response that is a response body. The runner is in charge
-// of getting the contents to the destination. The metadata will be received.
-type File struct {
-	ContentType string        `json:"content_type"`
-	Encoding    string        `json:"encoding"`
-	Filename    string        `json:"filename"`
-	Contents    io.ReadSeeker `json:"-"`
-}
-
-// MarshalJSON marshals the file metadata.
-func (f File) MarshalJSON() ([]byte, error) {
-	type alias File
-	return json.Marshal(alias(f))
 }
 
 // ErrHandler creates a new handler to respond with only errors.
