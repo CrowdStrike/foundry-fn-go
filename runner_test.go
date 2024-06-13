@@ -2,6 +2,7 @@ package fdk_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -748,7 +749,7 @@ integer: 1`,
 				},
 			},
 			{
-				name: "POST to a endpoint that returns a sdk.File with encoding should pass",
+				name: "POST to an endpoint that returns a sdk.File with encoding should pass",
 				input: inputs{
 					body: newReqBody(t, fileInReq{
 						ContentType: "application/json",
@@ -777,10 +778,37 @@ integer: 1`,
 					equalFiles(t, got.Filename, `{"dodgers":"stink"}`)
 				},
 			},
+			{
+				name: "POST to an endpoint that returns a gzip compressed sdk.File should pass",
+				input: inputs{
+					body: newReqBody(t, fileInReq{
+						ContentType:  "application/json",
+						DestFilename: filepath.Join(tmp, "third_file.json"),
+						V:            `{"dodgers":"reallystank"}`,
+					}),
+					method: "POST",
+					path:   "/compress-file",
+				},
+				newHandlerFn: func(ctx context.Context) fdk.Handler {
+					m := fdk.NewMux()
+					m.Post("/compress-file", fdk.HandleFnOf(newGzippedFileHandler))
+					return m
+				},
+				want: func(t *testing.T, resp *http.Response, got fdk.File) {
+					equalVals(t, 201, resp.StatusCode)
+
+					equalVals(t, "application/json", got.ContentType)
+					equalVals(t, "gzip", got.Encoding)
+
+					wantFilename := filepath.Join(tmp, "third_file.json")
+					equalVals(t, wantFilename, got.Filename)
+					equalGzipFiles(t, got.Filename, `{"dodgers":"reallystank"}`)
+				},
+			},
 		}
 
 		for _, tt := range tests {
-			fn := func(t *testing.T) {
+			t.Run(tt.name, func(t *testing.T) {
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
@@ -814,8 +842,7 @@ integer: 1`,
 				mustNoErr(t, json.Unmarshal(b, &got))
 
 				tt.want(t, resp, got.File)
-			}
-			t.Run(tt.name, fn)
+			})
 		}
 	})
 }
@@ -928,8 +955,15 @@ func newFileHandler(_ context.Context, r fdk.RequestOf[fileInReq]) fdk.Response 
 			ContentType: r.Body.ContentType,
 			Encoding:    r.Body.Encoding,
 			Filename:    r.Body.DestFilename,
-			Contents:    strings.NewReader(r.Body.V),
+			Contents:    io.NopCloser(strings.NewReader(r.Body.V)),
 		},
+	}
+}
+
+func newGzippedFileHandler(_ context.Context, r fdk.RequestOf[fileInReq]) fdk.Response {
+	return fdk.Response{
+		Code: 201,
+		Body: fdk.FileGZip(r.Body.DestFilename, r.Body.ContentType, io.NopCloser(strings.NewReader(r.Body.V))),
 	}
 }
 
@@ -946,7 +980,35 @@ func equalVals[T comparable](t testing.TB, want, got T) bool {
 func equalFiles(t testing.TB, filename string, want string) {
 	t.Helper()
 
-	b, err := os.ReadFile(filename)
+	f, err := os.Open(filename)
+	mustNoErr(t, err)
+	defer func() { _ = f.Close() }()
+
+	equalReader(t, want, f)
+
+	err = f.Close()
+	if err != nil {
+		t.Errorf("failed to close file: " + err.Error())
+	}
+}
+
+func equalGzipFiles(t testing.TB, filename string, want string) {
+	t.Helper()
+
+	f, err := os.Open(filename)
+	mustNoErr(t, err)
+	defer func() { _ = f.Close() }()
+
+	gr, err := gzip.NewReader(f)
+	mustNoErr(t, err)
+
+	equalReader(t, want, gr)
+}
+
+func equalReader(t testing.TB, want string, got io.Reader) {
+	t.Helper()
+
+	b, err := io.ReadAll(got)
 	mustNoErr(t, err)
 
 	equalVals(t, want, string(b))

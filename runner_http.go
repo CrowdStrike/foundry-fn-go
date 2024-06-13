@@ -41,7 +41,7 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 		resp := h.Handle(ctx, r)
 
 		if f, ok := resp.Body.(File); ok {
-			err := writeFile(f.Contents, f.Filename)
+			err := writeFile(logger, f.Contents, f.Filename)
 			if err != nil {
 				resp.Errors = append(resp.Errors, APIError{Code: http.StatusInternalServerError, Message: err.Error()})
 				writeErr := writeResponse(logger, w, resp)
@@ -155,16 +155,26 @@ func writeResponse(logger *slog.Logger, w http.ResponseWriter, resp Response) er
 	return err
 }
 
-func writeFile(r io.Reader, filename string) error {
+func writeFile(logger *slog.Logger, r io.ReadCloser, filename string) error {
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
-	defer func() { _ = f.Close() }() // just in case
+	defer func() {
+		// just in case
+		_ = f.Close()
+		_ = r.Close()
+	}()
 
 	_, err = io.Copy(f, r)
 	if err != nil {
 		return fmt.Errorf("failed to write contents to file: %w", err)
+	}
+
+	err = r.Close()
+	if err != nil {
+		// we swallow the error here, there's nothing we can do about it...
+		logger.Error("failed to close file contents", "err", err)
 	}
 
 	err = f.Close()
