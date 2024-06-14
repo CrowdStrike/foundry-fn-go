@@ -41,6 +41,7 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 		resp := h.Handle(ctx, r)
 
 		if f, ok := resp.Body.(File); ok {
+			f = NormalizeFile(f)
 			err := writeFile(logger, f.Contents, f.Filename)
 			if err != nil {
 				resp.Errors = append(resp.Errors, APIError{Code: http.StatusInternalServerError, Message: err.Error()})
@@ -51,6 +52,7 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 				return
 			}
 			f.Contents = nil
+			resp.Body = f
 		}
 
 		err = writeResponse(logger, w, resp)

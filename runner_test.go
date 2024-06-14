@@ -79,21 +79,21 @@ func TestRun_httprunner(t *testing.T) {
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got respBody) {
-					equalVals(t, 201, resp.StatusCode)
-					equalVals(t, 201, got.Code)
+					fdk.EqualVals(t, 201, resp.StatusCode)
+					fdk.EqualVals(t, 201, got.Code)
 
 					if len(got.Errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
 					}
 
 					echo := got.Req
-					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
+					fdk.EqualVals(t, config{Str: "val", Int: 1}, echo.Config)
 
-					equalVals(t, "/path", echo.Req.Path)
-					equalVals(t, "DELETE", echo.Req.Method)
-					equalVals(t, "id1", echo.Req.Queries.Get("ids"))
-					equalVals(t, "trace1", echo.Req.TraceID)
-					equalVals(t, "trace1", echo.Req.CtxTraceID)
+					fdk.EqualVals(t, "/path", echo.Req.Path)
+					fdk.EqualVals(t, "DELETE", echo.Req.Method)
+					fdk.EqualVals(t, "id1", echo.Req.Queries.Get("ids"))
+					fdk.EqualVals(t, "trace1", echo.Req.TraceID)
+					fdk.EqualVals(t, "trace1", echo.Req.CtxTraceID)
 
 					wantHeaders := make(http.Header)
 					wantHeaders.Set("X-Cs-Origin", "fooorigin")
@@ -124,19 +124,19 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got respBody) {
-					equalVals(t, 201, resp.StatusCode)
-					equalVals(t, 201, got.Code)
+					fdk.EqualVals(t, 201, resp.StatusCode)
+					fdk.EqualVals(t, 201, got.Code)
 
 					if len(got.Errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
 					}
 
 					echo := got.Req
-					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
+					fdk.EqualVals(t, config{Str: "val", Int: 1}, echo.Config)
 
-					equalVals(t, "/path", echo.Req.Path)
-					equalVals(t, "DELETE", echo.Req.Method)
-					equalVals(t, "id1", echo.Req.Queries.Get("ids"))
+					fdk.EqualVals(t, "/path", echo.Req.Path)
+					fdk.EqualVals(t, "DELETE", echo.Req.Method)
+					fdk.EqualVals(t, "id1", echo.Req.Queries.Get("ids"))
 
 					wantHeaders := make(http.Header)
 					wantHeaders.Set("X-Cs-Origin", "fooorigin")
@@ -167,19 +167,19 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got respBody) {
-					equalVals(t, 201, resp.StatusCode)
-					equalVals(t, 201, got.Code)
+					fdk.EqualVals(t, 201, resp.StatusCode)
+					fdk.EqualVals(t, 201, got.Code)
 
 					if len(got.Errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
 					}
 
 					echo := got.Req
-					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
+					fdk.EqualVals(t, config{Str: "val", Int: 1}, echo.Config)
 
-					equalVals(t, "/path", echo.Req.Path)
-					equalVals(t, "DELETE", echo.Req.Method)
-					equalVals(t, "id1", echo.Req.Queries.Get("ids"))
+					fdk.EqualVals(t, "/path", echo.Req.Path)
+					fdk.EqualVals(t, "DELETE", echo.Req.Method)
+					fdk.EqualVals(t, "id1", echo.Req.Queries.Get("ids"))
 
 					wantHeaders := make(http.Header)
 					wantHeaders.Set("X-Cs-Origin", "fooorigin")
@@ -207,19 +207,19 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got respBody) {
-					equalVals(t, 201, resp.StatusCode)
-					equalVals(t, 201, got.Code)
+					fdk.EqualVals(t, 201, resp.StatusCode)
+					fdk.EqualVals(t, 201, got.Code)
 
 					if len(got.Errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
 					}
 
 					echo := got.Req
-					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
+					fdk.EqualVals(t, config{Str: "val", Int: 1}, echo.Config)
 
-					equalVals(t, "GET", echo.Req.Method)
-					equalVals(t, "/path", echo.Req.Path)
-					equalVals(t, "baz", echo.Req.Queries.Get("bar"))
+					fdk.EqualVals(t, "GET", echo.Req.Method)
+					fdk.EqualVals(t, "/path", echo.Req.Path)
+					fdk.EqualVals(t, "baz", echo.Req.Queries.Get("bar"))
 
 					wantHeaders := make(http.Header)
 					wantHeaders.Set("X-Cs-Origin", "fooorigin")
@@ -248,8 +248,8 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got respBody) {
-					equalVals(t, 201, resp.StatusCode)
-					equalVals(t, 201, got.Code)
+					fdk.EqualVals(t, 201, resp.StatusCode)
+					fdk.EqualVals(t, 201, got.Code)
 
 					if len(got.Errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
@@ -257,11 +257,11 @@ integer: 1`,
 
 					echo := got.Req
 
-					equalVals(t, `{"dodgers":"stink"}`, string(echo.Req.Body))
-					equalVals(t, `{"kings":"stink_too"}`, string(echo.Req.Context))
-					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
-					equalVals(t, "/path", echo.Req.Path)
-					equalVals(t, "POST", echo.Req.Method)
+					fdk.EqualVals(t, `{"dodgers":"stink"}`, string(echo.Req.Body))
+					fdk.EqualVals(t, `{"kings":"stink_too"}`, string(echo.Req.Context))
+					fdk.EqualVals(t, config{Str: "val", Int: 1}, echo.Config)
+					fdk.EqualVals(t, "/path", echo.Req.Path)
+					fdk.EqualVals(t, "POST", echo.Req.Method)
 
 					wantHeaders := make(http.Header)
 					wantHeaders.Set("X-Cs-Origin", "fooorigin")
@@ -289,8 +289,8 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got respBody) {
-					equalVals(t, 201, resp.StatusCode)
-					equalVals(t, 201, got.Code)
+					fdk.EqualVals(t, 201, resp.StatusCode)
+					fdk.EqualVals(t, 201, got.Code)
 
 					if len(got.Errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
@@ -298,10 +298,10 @@ integer: 1`,
 
 					echo := got.Req
 
-					equalVals(t, `{"dodgers":"still stink"}`, string(echo.Req.Body))
-					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
-					equalVals(t, "/path", echo.Req.Path)
-					equalVals(t, "PUT", echo.Req.Method)
+					fdk.EqualVals(t, `{"dodgers":"still stink"}`, string(echo.Req.Body))
+					fdk.EqualVals(t, config{Str: "val", Int: 1}, echo.Config)
+					fdk.EqualVals(t, "/path", echo.Req.Path)
+					fdk.EqualVals(t, "PUT", echo.Req.Method)
 
 					wantHeaders := make(http.Header)
 					wantHeaders.Set("X-Cs-Origin", "fooorigin")
@@ -333,8 +333,8 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got respBody) {
-					equalVals(t, 201, resp.StatusCode)
-					equalVals(t, 201, got.Code)
+					fdk.EqualVals(t, 201, resp.StatusCode)
+					fdk.EqualVals(t, 201, got.Code)
 
 					if len(got.Errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
@@ -342,10 +342,10 @@ integer: 1`,
 
 					echo := got.Req
 
-					equalVals(t, `{"dodgers":"stink"}`, string(echo.Req.Body))
-					equalVals(t, config{Str: "val", Int: 1}, echo.Config)
-					equalVals(t, "/path", echo.Req.Path)
-					equalVals(t, "POST", echo.Req.Method)
+					fdk.EqualVals(t, `{"dodgers":"stink"}`, string(echo.Req.Body))
+					fdk.EqualVals(t, config{Str: "val", Int: 1}, echo.Config)
+					fdk.EqualVals(t, "/path", echo.Req.Path)
+					fdk.EqualVals(t, "POST", echo.Req.Method)
 
 					wantHeaders := make(http.Header)
 					wantHeaders.Set("X-Cs-Origin", "fooorigin")
@@ -373,15 +373,15 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got respBody) {
-					equalVals(t, 404, resp.StatusCode)
-					equalVals(t, 404, got.Code)
+					fdk.EqualVals(t, 404, resp.StatusCode)
+					fdk.EqualVals(t, 404, got.Code)
 
 					if len(got.Errs) != 1 {
 						t.Fatalf("did not received expected number of errors\n\t\twant:\t1 error\n\t\tgot:\t%+v", got.Errs)
 					}
 
 					wantErr := fdk.APIError{Code: http.StatusNotFound, Message: "route not found"}
-					equalVals(t, wantErr, got.Errs[0])
+					fdk.EqualVals(t, wantErr, got.Errs[0])
 				},
 			},
 			{
@@ -402,15 +402,15 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got respBody) {
-					equalVals(t, 405, resp.StatusCode)
-					equalVals(t, 405, got.Code)
+					fdk.EqualVals(t, 405, resp.StatusCode)
+					fdk.EqualVals(t, 405, got.Code)
 
 					if len(got.Errs) != 1 {
 						t.Fatalf("did not received expected number of errors\n\t\twant:\t1 error\n\t\tgot:\t%+v", got.Errs)
 					}
 
 					wantErr := fdk.APIError{Code: http.StatusMethodNotAllowed, Message: "method not allowed"}
-					equalVals(t, wantErr, got.Errs[0])
+					fdk.EqualVals(t, wantErr, got.Errs[0])
 				},
 			},
 			{
@@ -431,8 +431,8 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got respBody) {
-					equalVals(t, 400, resp.StatusCode)
-					equalVals(t, 400, got.Code)
+					fdk.EqualVals(t, 400, resp.StatusCode)
+					fdk.EqualVals(t, 400, got.Code)
 
 					if len(got.Errs) != 1 {
 						t.Fatalf("did not received expected number of errors\n\t\twant:\t1 error\n\t\tgot:\t%+v", got.Errs)
@@ -442,7 +442,7 @@ integer: 1`,
 						Code:    http.StatusBadRequest,
 						Message: "config is invalid: invalid config \"string\" field received: wrong string\ninvalid config \"integer\" field received: 0",
 					}
-					equalVals(t, wantErr, got.Errs[0])
+					fdk.EqualVals(t, wantErr, got.Errs[0])
 				},
 			},
 			{
@@ -464,8 +464,8 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got respBody) {
-					equalVals(t, http.StatusInternalServerError, resp.StatusCode)
-					equalVals(t, http.StatusInternalServerError, got.Code)
+					fdk.EqualVals(t, http.StatusInternalServerError, resp.StatusCode)
+					fdk.EqualVals(t, http.StatusInternalServerError, got.Code)
 
 					if len(got.Errs) != 1 {
 						t.Fatalf("did not received expected number of errors\n\t\twant:\t1 error\n\t\tgot:\t%+v", got.Errs)
@@ -475,7 +475,7 @@ integer: 1`,
 						Code:    http.StatusInternalServerError,
 						Message: "gots the error",
 					}
-					equalVals(t, wantErr, got.Errs[0])
+					fdk.EqualVals(t, wantErr, got.Errs[0])
 				},
 			},
 			{
@@ -494,8 +494,8 @@ integer: 1`,
 					)
 				},
 				want: func(t *testing.T, resp *http.Response, got respBody) {
-					equalVals(t, 501, resp.StatusCode)
-					equalVals(t, 501, got.Code)
+					fdk.EqualVals(t, 501, resp.StatusCode)
+					fdk.EqualVals(t, 501, got.Code)
 
 					if len(got.Errs) != 3 {
 						t.Fatalf("did not received expected number of errors\n\t\twant:\t3 error\n\t\tgot:\t%+v", got.Errs)
@@ -506,9 +506,9 @@ integer: 1`,
 						{Code: 501, Message: "even higher"},
 						{Code: 400, Message: "some user error"},
 					}
-					equalVals(t, len(wantErrs), len(got.Errs))
+					fdk.EqualVals(t, len(wantErrs), len(got.Errs))
 					for i, want := range wantErrs {
-						equalVals(t, want, got.Errs[i])
+						fdk.EqualVals(t, want, got.Errs[i])
 					}
 				},
 			},
@@ -607,8 +607,8 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, code int, workflowCtx fdk.WorkflowCtx, errs []fdk.APIError) {
-					equalVals(t, 202, resp.StatusCode)
-					equalVals(t, 202, code)
+					fdk.EqualVals(t, 202, resp.StatusCode)
+					fdk.EqualVals(t, 202, code)
 
 					if len(errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", errs)
@@ -640,8 +640,8 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, code int, workflowCtx fdk.WorkflowCtx, errs []fdk.APIError) {
-					equalVals(t, 202, resp.StatusCode)
-					equalVals(t, 202, code)
+					fdk.EqualVals(t, 202, resp.StatusCode)
+					fdk.EqualVals(t, 202, code)
 
 					if len(errs) > 0 {
 						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", errs)
@@ -738,13 +738,13 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got fdk.File) {
-					equalVals(t, 201, resp.StatusCode)
+					fdk.EqualVals(t, 201, resp.StatusCode)
 
-					equalVals(t, "application/json", got.ContentType)
-					equalVals(t, "", got.Encoding)
+					fdk.EqualVals(t, "application/json", got.ContentType)
+					fdk.EqualVals(t, "", got.Encoding)
 
 					wantFilename := filepath.Join(tmp, "first_file.json")
-					equalVals(t, wantFilename, got.Filename)
+					fdk.EqualVals(t, wantFilename, got.Filename)
 					equalFiles(t, got.Filename, `{"some":"json"}`)
 				},
 			},
@@ -768,13 +768,13 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got fdk.File) {
-					equalVals(t, 201, resp.StatusCode)
+					fdk.EqualVals(t, 201, resp.StatusCode)
 
-					equalVals(t, "application/json", got.ContentType)
-					equalVals(t, "gzip", got.Encoding)
+					fdk.EqualVals(t, "application/json", got.ContentType)
+					fdk.EqualVals(t, "gzip", got.Encoding)
 
 					wantFilename := filepath.Join(tmp, "second_file.json")
-					equalVals(t, wantFilename, got.Filename)
+					fdk.EqualVals(t, wantFilename, got.Filename)
 					equalFiles(t, got.Filename, `{"dodgers":"stink"}`)
 				},
 			},
@@ -795,13 +795,13 @@ integer: 1`,
 					return m
 				},
 				want: func(t *testing.T, resp *http.Response, got fdk.File) {
-					equalVals(t, 201, resp.StatusCode)
+					fdk.EqualVals(t, 201, resp.StatusCode)
 
-					equalVals(t, "application/json", got.ContentType)
-					equalVals(t, "gzip", got.Encoding)
+					fdk.EqualVals(t, "application/json", got.ContentType)
+					fdk.EqualVals(t, "gzip", got.Encoding)
 
 					wantFilename := filepath.Join(tmp, "third_file.json")
-					equalVals(t, wantFilename, got.Filename)
+					fdk.EqualVals(t, wantFilename, got.Filename)
 					equalGzipFiles(t, got.Filename, `{"dodgers":"reallystank"}`)
 				},
 			},
@@ -972,16 +972,6 @@ func newGzippedFileHandler(_ context.Context, r fdk.RequestOf[fileInReq]) fdk.Re
 	}
 }
 
-func equalVals[T comparable](t testing.TB, want, got T) bool {
-	t.Helper()
-
-	match := want == got
-	if !match {
-		t.Errorf("values not equal:\n\t\twant:\t%#v\n\t\tgot:\t%#v", want, got)
-	}
-	return match
-}
-
 func equalFiles(t testing.TB, filename string, want string) {
 	t.Helper()
 
@@ -1016,7 +1006,7 @@ func equalReader(t testing.TB, want string, got io.Reader) {
 	b, err := io.ReadAll(got)
 	mustNoErr(t, err)
 
-	equalVals(t, want, string(b))
+	fdk.EqualVals(t, want, string(b))
 }
 
 func mustNoErr(t testing.TB, err error) {
