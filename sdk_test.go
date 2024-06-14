@@ -30,8 +30,8 @@ func TestFn(t *testing.T) {
 				fnVersion: "1",
 			},
 			wants: func(t *testing.T, gotFnID string, gotVersion int) {
-				equalVals(t, "fn-id", gotFnID)
-				equalVals(t, 1, gotVersion)
+				fdk.EqualVals(t, "fn-id", gotFnID)
+				fdk.EqualVals(t, 1, gotVersion)
 			},
 		},
 		{
@@ -41,8 +41,8 @@ func TestFn(t *testing.T) {
 				fnVersion: "",
 			},
 			wants: func(t *testing.T, gotFnID string, gotVersion int) {
-				equalVals(t, "fn-id", gotFnID)
-				equalVals(t, 0, gotVersion)
+				fdk.EqualVals(t, "fn-id", gotFnID)
+				fdk.EqualVals(t, 0, gotVersion)
 			},
 		},
 	}
@@ -67,6 +67,6 @@ func TestAPIError(t *testing.T) {
 	}
 	for _, err := range errs {
 		want := fmt.Sprintf("[%d] %s", err.Code, err.Message)
-		equalVals(t, want, err.Error())
+		fdk.EqualVals(t, want, err.Error())
 	}
 }
