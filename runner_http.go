@@ -23,6 +23,31 @@ const (
 type runnerHTTP struct{}
 
 func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
+	s := &http.Server{
+		Addr:           fmt.Sprintf(":%d", port()),
+		Handler:        newHTTPRunMux(ctx, logger, h),
+		MaxHeaderBytes: mb,
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+
+			logger.Info("shutting down HTTP server...")
+			if err := s.Shutdown(shutdownCtx); err != nil {
+				logger.Error("failed to shutdown server", "err", err)
+			}
+		}
+	}()
+
+	logger.Info("serving HTTP server on port " + strconv.Itoa(port()))
+	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Error("unexpected shutdown of server", "err", err)
+	}
+}
+
+func newHTTPRunMux(ctx context.Context, logger *slog.Logger, h Handler) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		r, err := toRequest(req)
@@ -61,43 +86,24 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 		}
 	}))
 
-	s := &http.Server{
-		Addr:           fmt.Sprintf(":%d", port()),
-		Handler:        mux,
-		MaxHeaderBytes: mb,
-	}
-	go func() {
-		select {
-		case <-ctx.Done():
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer cancel()
+	return mux
+}
 
-			logger.Info("shutting down HTTP server...")
-			if err := s.Shutdown(shutdownCtx); err != nil {
-				logger.Error("failed to shutdown server", "err", err)
-			}
-		}
-	}()
-
-	logger.Info("serving HTTP server on port " + strconv.Itoa(port()))
-	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		logger.Error("unexpected shutdown of server", "err", err)
-	}
+type httpPayload struct {
+	Body        json.RawMessage `json:"body,omitempty"`
+	Context     json.RawMessage `json:"context,omitempty"`
+	AccessToken string          `json:"access_token"`
+	Method      string          `json:"method"`
+	Params      struct {
+		Header http.Header `json:"header"`
+		Query  url.Values  `json:"query"`
+	} `json:"params"`
+	URL     string `json:"url"`
+	TraceID string `json:"trace_id"`
 }
 
 func toRequest(req *http.Request) (Request, error) {
-	var r struct {
-		Body        json.RawMessage `json:"body"`
-		Context     json.RawMessage `json:"context"`
-		AccessToken string          `json:"access_token"`
-		Method      string          `json:"method"`
-		Params      struct {
-			Header http.Header `json:"header"`
-			Query  url.Values  `json:"query"`
-		} `json:"params"`
-		URL     string `json:"url"`
-		TraceID string `json:"trace_id"`
-	}
+	var r httpPayload
 	payload, err := io.ReadAll(io.LimitReader(req.Body, 5*mb))
 	if err != nil {
 		return Request{}, fmt.Errorf("failed to read request body: %s", err)
