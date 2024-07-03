@@ -64,8 +64,22 @@ func HandleFnOf[T any](fn func(context.Context, RequestOf[T]) Response) Handler 
 
 // WorkflowCtx is the Request.Context field when integrating a function with Falcon Fusion workflow.
 type WorkflowCtx struct {
-	AppID string `json:"app_id"`
-	CID   string `json:"cid"`
+	ActivityExecID    string `json:"activity_execution_id"`
+	AppID             string `json:"app_id"`
+	CID               string `json:"cid"`
+	OwnerCID          string `json:"owner_cid"`
+	DefinitionID      string `json:"definition_id,omitempty"`
+	DefinitionVersion int    `json:"definition_version,omitempty"`
+	ExecutionID       string `json:"execution_id,omitempty"`
+	Activity          struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		NodeID string `json:"node_id"`
+	} `json:"activity"`
+	Trigger struct {
+		ID   string `json:"id,omitempty"`
+		Name string `json:"name,omitempty"`
+	} `json:"trigger"`
 }
 
 // HandleWorkflow provides a means to create a handler with workflow integration. This function
