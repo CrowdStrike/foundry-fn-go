@@ -186,6 +186,7 @@ func Run[T Cfg](ctx context.Context, newHandlerFn func(_ context.Context, cfg T)
 	if loadErr != nil {
 		if loadErr.err != nil {
 			logger.Error("failed to load config", "err", loadErr.err)
+			ctx = context.WithValue(ctx, "_cfg_internal_err_key", loadErr.err)
 		}
 		run(ctx, logger, ErrHandler(loadErr.apiErr))
 		return
