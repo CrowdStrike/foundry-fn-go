@@ -9,21 +9,16 @@ import (
 	"net/url"
 	"os"
 	"runtime/debug"
-	"strconv"
 )
 
 // Fn returns the active function id and version.
 func Fn() struct {
-	ID      string
-	Version int
+	ID string
 } {
-	v, _ := strconv.Atoi(os.Getenv("CS_FN_VERSION"))
 	return struct {
-		ID      string
-		Version int
+		ID string
 	}{
-		ID:      os.Getenv("CS_FN_ID"),
-		Version: v,
+		ID: os.Getenv("CS_FN_ID"),
 	}
 }
 
