@@ -11,11 +11,10 @@ import (
 func TestFn(t *testing.T) {
 	type (
 		inputs struct {
-			fnID      string
-			fnVersion string
+			fnID string
 		}
 
-		wantFn func(t *testing.T, gotFnID string, gotVersion int)
+		wantFn func(t *testing.T, gotFnID string)
 	)
 
 	tests := []struct {
@@ -26,23 +25,19 @@ func TestFn(t *testing.T) {
 		{
 			name: "fn-id set with version 1",
 			inputs: inputs{
-				fnID:      "fn-id",
-				fnVersion: "1",
+				fnID: "fn-id",
 			},
-			wants: func(t *testing.T, gotFnID string, gotVersion int) {
+			wants: func(t *testing.T, gotFnID string) {
 				fdk.EqualVals(t, "fn-id", gotFnID)
-				fdk.EqualVals(t, 1, gotVersion)
 			},
 		},
 		{
 			name: "fn-id set without version",
 			inputs: inputs{
-				fnID:      "fn-id",
-				fnVersion: "",
+				fnID: "fn-id",
 			},
-			wants: func(t *testing.T, gotFnID string, gotVersion int) {
+			wants: func(t *testing.T, gotFnID string) {
 				fdk.EqualVals(t, "fn-id", gotFnID)
-				fdk.EqualVals(t, 0, gotVersion)
 			},
 		},
 	}
@@ -50,10 +45,9 @@ func TestFn(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("CS_FN_ID", tt.inputs.fnID)
-			t.Setenv("CS_FN_VERSION", tt.inputs.fnVersion)
 
 			fn := fdk.Fn()
-			tt.wants(t, fn.ID, fn.Version)
+			tt.wants(t, fn.ID)
 		})
 	}
 
