@@ -26,6 +26,8 @@ func TestRun_httprunner(t *testing.T) {
 		AccessToken string          `json:"access_token"`
 		Body        json.RawMessage `json:"body"`
 		Context     json.RawMessage `json:"context"`
+		FnID        string          `json:"fn_id"`
+		FnVersion   int             `json:"fn_version"`
 		Method      string          `json:"method"`
 		Params      struct {
 			Header http.Header `json:"header"`
@@ -517,15 +519,7 @@ integer: 1`,
 		for _, tt := range tests {
 			fn := func(t *testing.T) {
 				if tt.inputs.config != "" {
-					cfgFile := tt.inputs.configFile
-					if cfgFile == "" {
-						cfgFile = "config.json"
-					}
-					tmp := filepath.Join(t.TempDir(), cfgFile)
-					t.Setenv("CS_FN_CONFIG_PATH", tmp)
-
-					err := os.WriteFile(tmp, []byte(tt.inputs.config), 0666)
-					mustNoErr(t, err)
+					writeConfigFile(t, tt.inputs.config, tt.inputs.configFile)
 				}
 
 				ctx, cancel := context.WithCancel(context.Background())
@@ -563,6 +557,150 @@ integer: 1`,
 				defer func() { _ = resp.Body.Close() }()
 
 				var got respBody
+				decodeBody(t, resp.Body, &got)
+
+				tt.want(t, resp, got)
+			}
+			t.Run(tt.name, fn)
+		}
+	})
+
+	t.Run("when calling healthz handlers", func(t *testing.T) {
+		type (
+			inputs struct {
+				fnID           string
+				fnBuildVersion int
+				fnVersion      int
+				config         string
+			}
+
+			respGeneric struct {
+				Code int             `json:"code"`
+				Errs []fdk.APIError  `json:"errors"`
+				Body json.RawMessage `json:"body"`
+			}
+
+			wantFn func(t *testing.T, resp *http.Response, got respGeneric)
+		)
+
+		tests := []struct {
+			name         string
+			inputs       inputs
+			newHandlerFn func(ctx context.Context, cfg config) fdk.Handler
+			want         wantFn
+		}{
+			{
+				name: "hitting default healthz endpoint should return expected data",
+				inputs: inputs{
+					fnID:           "id1",
+					fnBuildVersion: 1,
+					fnVersion:      2,
+					config:         `{"string": "val","integer": 1}`,
+				},
+				newHandlerFn: func(ctx context.Context, cfg config) fdk.Handler {
+					return fdk.NewMux()
+				},
+				want: func(t *testing.T, resp *http.Response, got respGeneric) {
+					fdk.EqualVals(t, 200, resp.StatusCode)
+					fdk.EqualVals(t, 200, got.Code)
+
+					if len(got.Errs) > 0 {
+						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
+					}
+
+					var gotBody map[string]string
+					decodeJSON(t, got.Body, &gotBody)
+
+					fdk.EqualVals(t, "ok", gotBody["status"])
+					fdk.EqualVals(t, "id1", gotBody["fn_id"])
+					fdk.EqualVals(t, "1", gotBody["fn_build_version"])
+					fdk.EqualVals(t, "2", gotBody["fn_version"])
+				},
+			},
+			{
+				name: "when providing healthz endpoint should use provided healthz endpoint",
+				inputs: inputs{
+					config: `{"string": "val","integer": 1}`,
+				},
+				newHandlerFn: func(ctx context.Context, cfg config) fdk.Handler {
+					m := fdk.NewMux()
+					m.Get("/healthz", fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
+						return fdk.Response{
+							Code: http.StatusAccepted,
+							Body: fdk.JSON("ok"),
+						}
+					}))
+					return m
+				},
+				want: func(t *testing.T, resp *http.Response, got respGeneric) {
+					fdk.EqualVals(t, 202, resp.StatusCode)
+					fdk.EqualVals(t, 202, got.Code)
+
+					if len(got.Errs) > 0 {
+						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
+					}
+
+					var gotBody string
+					decodeJSON(t, got.Body, &gotBody)
+
+					fdk.EqualVals(t, "ok", gotBody)
+				},
+			},
+			{
+				name: "when config is invalid healthz endpoint should return errors",
+				inputs: inputs{
+					config: `{"string": "","integer": 0}`,
+				},
+				newHandlerFn: func(ctx context.Context, cfg config) fdk.Handler {
+					return fdk.NewMux()
+				},
+				want: func(t *testing.T, resp *http.Response, got respGeneric) {
+					fdk.EqualVals(t, 400, resp.StatusCode)
+					fdk.EqualVals(t, 400, got.Code)
+
+					wantErrs := []fdk.APIError{
+						{Code: 400, Message: "config is invalid: invalid config \"string\" field received: \ninvalid config \"integer\" field received: 0"},
+					}
+					fdk.EqualVals(t, len(wantErrs), len(got.Errs))
+					for i, want := range wantErrs {
+						fdk.EqualVals(t, want, got.Errs[i])
+					}
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			fn := func(t *testing.T) {
+				if tt.inputs.config != "" {
+					writeConfigFile(t, tt.inputs.config, "")
+				}
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				addr := newServer(ctx, t, func(ctx context.Context, cfg config) fdk.Handler {
+					return tt.newHandlerFn(ctx, cfg)
+				})
+
+				t.Setenv("CS_FN_BUILD_VERSION", strconv.Itoa(tt.inputs.fnBuildVersion))
+
+				b, err := json.Marshal(testReq{
+					FnID:      tt.inputs.fnID,
+					FnVersion: tt.inputs.fnVersion,
+					URL:       "/healthz",
+					Method:    http.MethodGet,
+				})
+				mustNoErr(t, err)
+
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost, addr, bytes.NewBuffer(b))
+				mustNoErr(t, err)
+
+				resp, err := http.DefaultClient.Do(req)
+				mustNoErr(t, err)
+				cancel()
+				defer func() { _ = resp.Body.Close() }()
+
+				var got respGeneric
 				decodeBody(t, resp.Body, &got)
 
 				tt.want(t, resp, got)
@@ -1043,8 +1181,13 @@ func decodeBody(t testing.TB, r io.Reader, v any) {
 		t.Fatal("failed to read: " + err.Error())
 	}
 
-	err = json.Unmarshal(b, v)
-	if err != nil {
+	decodeJSON(t, b, v)
+}
+
+func decodeJSON(t testing.TB, b []byte, v any) {
+	t.Helper()
+
+	if err := json.Unmarshal(b, v); err != nil {
 		t.Fatalf("failed to unmarshal json: %s\n\t\tpayload:\t%s", err, string(b))
 	}
 }
@@ -1089,4 +1232,17 @@ func newIP(t *testing.T) string {
 		t.Fatal("invalid parts returned: ", parts)
 	}
 	return parts[len(parts)-1]
+}
+
+func writeConfigFile(t *testing.T, config, cfgFile string) {
+	t.Helper()
+
+	if cfgFile == "" {
+		cfgFile = "config.json"
+	}
+	tmp := filepath.Join(t.TempDir(), cfgFile)
+	t.Setenv("CS_FN_CONFIG_PATH", tmp)
+
+	err := os.WriteFile(tmp, []byte(config), 0666)
+	mustNoErr(t, err)
 }
