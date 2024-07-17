@@ -87,6 +87,8 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 
 func toRequest(req *http.Request) (Request, error) {
 	var r struct {
+		FnID        string          `json:"fn_id"`
+		FnVersion   int             `json:"fn_version"`
 		Body        json.RawMessage `json:"body"`
 		Context     json.RawMessage `json:"context"`
 		AccessToken string          `json:"access_token"`
@@ -117,8 +119,10 @@ func toRequest(req *http.Request) (Request, error) {
 	r.Params.Header = hCanon
 
 	out := Request{
-		Body:    r.Body,
-		Context: r.Context,
+		FnID:      r.FnID,
+		FnVersion: r.FnVersion,
+		Body:      r.Body,
+		Context:   r.Context,
 		Params: struct {
 			Header http.Header
 			Query  url.Values
