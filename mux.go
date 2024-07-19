@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 )
 
-type routeKey struct {
-	method string
-	route  string
-}
+const (
+	healthzRoute  = "/healthz"
+	healthzMethod = http.MethodGet
+)
 
 // Mux defines a handler that will dispatch to a matching route/method combination. Much
 // like the std lib http.ServeMux, but with slightly more opinionated route setting. We
@@ -23,11 +25,25 @@ type Mux struct {
 
 // NewMux creates a new Mux that is ready for assignment.
 func NewMux() *Mux {
-	return &Mux{
+	m := &Mux{
 		routes:      make(map[string]bool),
 		meth2Routes: make(map[string]map[string]bool),
 		handlers:    make(map[routeKey]Handler),
 	}
+
+	m.Get(healthzRoute, HandlerFn(func(ctx context.Context, r Request) Response {
+		return Response{
+			Code: http.StatusOK,
+			Body: JSON(map[string]string{
+				"status":           "ok",
+				"fn_id":            r.FnID,
+				"fn_build_version": os.Getenv("CS_FN_BUILD_VERSION"),
+				"fn_version":       strconv.Itoa(r.FnVersion),
+			}),
+		}
+	}))
+
+	return m
 }
 
 // Handle enacts the handler to process the request/response lifecycle. The mux fulfills the
@@ -78,8 +94,10 @@ func (m *Mux) registerRoute(method, route string, h Handler) {
 		panic("handler must not be nil")
 	}
 
+	isHealthZ := route == healthzRoute && method == healthzMethod
+
 	rk := routeKey{route: route, method: method}
-	if _, ok := m.handlers[rk]; ok {
+	if _, ok := m.handlers[rk]; ok && !isHealthZ {
 		panic(fmt.Sprintf("multiple handlers added for: %q ", method+" "+route))
 	}
 
@@ -107,4 +125,9 @@ func (m *Mux) registerRoute(method, route string, h Handler) {
 	m.meth2Routes[method] = m2r
 
 	m.handlers[rk] = h
+}
+
+type routeKey struct {
+	method string
+	route  string
 }

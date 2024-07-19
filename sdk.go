@@ -11,17 +11,6 @@ import (
 	"runtime/debug"
 )
 
-// Fn returns the active function id and version.
-func Fn() struct {
-	ID string
-} {
-	return struct {
-		ID string
-	}{
-		ID: os.Getenv("CS_FN_ID"),
-	}
-}
-
 // Handler provides a handler for our incoming request.
 type Handler interface {
 	Handle(ctx context.Context, r Request) Response
@@ -110,9 +99,11 @@ type (
 
 	// RequestOf provides a generic body we can target our unmarshaling into.
 	RequestOf[T any] struct {
-		Body    T
-		Context json.RawMessage
-		Params  struct {
+		FnID      string
+		FnVersion int
+		Body      T
+		Context   json.RawMessage
+		Params    struct {
 			Header http.Header
 			Query  url.Values
 		}
