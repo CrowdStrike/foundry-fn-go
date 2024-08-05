@@ -46,6 +46,18 @@ func HandleFnOf[T any](fn func(context.Context, RequestOf[T]) Response) Handler 
 	})
 }
 
+// HandlerFnOfOK provides a means to translate the incoming requests to the destination body type
+// and execute validation on that type. This normalizes the sad path for both the unmarshalling of
+// the request body and the validation of that request type using its OK() method.
+func HandlerFnOfOK[T interface{ OK() []APIError }](fn func(context.Context, RequestOf[T]) Response) Handler {
+	return HandleFnOf(func(ctx context.Context, r RequestOf[T]) Response {
+		if errs := r.Body.OK(); len(errs) > 0 {
+			return ErrResp(errs...)
+		}
+		return fn(ctx, r)
+	})
+}
+
 // WorkflowCtx is the Request.Context field when integrating a function with Falcon Fusion workflow.
 type WorkflowCtx struct {
 	ActivityExecID    string `json:"activity_execution_id"`
