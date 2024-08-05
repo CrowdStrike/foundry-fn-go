@@ -273,6 +273,48 @@ integer: 1`,
 				},
 			},
 			{
+				name: "simple POST request with handler ok should pass",
+				inputs: inputs{
+					body:    []byte(`{"dodgers":"stink"}`),
+					context: []byte(`{"kings":"stink_too"}`),
+					config:  `{"string": "val","integer": 1}`,
+					headers: http.Header{
+						"X-Cs-Origin":      []string{"fooorigin"},
+						"X-Cs-Executionid": []string{"exec_id"},
+						"X-Cs-Traceid":     []string{"trace_id"},
+					},
+					method: "POST",
+					path:   "/path",
+				},
+				newHandlerFn: func(ctx context.Context, cfg config) fdk.Handler {
+					m := fdk.NewMux()
+					m.Post("/path", newJSONBodyHandler(cfg))
+					return m
+				},
+				want: func(t *testing.T, resp *http.Response, got respBody) {
+					fdk.EqualVals(t, 201, resp.StatusCode)
+					fdk.EqualVals(t, 201, got.Code)
+
+					if len(got.Errs) > 0 {
+						t.Errorf("received unexpected errors\n\t\tgot:\t%+v", got.Errs)
+					}
+
+					echo := got.Req
+
+					fdk.EqualVals(t, `{"dodgers":"stink"}`, string(echo.Req.Body))
+					fdk.EqualVals(t, `{"kings":"stink_too"}`, string(echo.Req.Context))
+					fdk.EqualVals(t, config{Str: "val", Int: 1}, echo.Config)
+					fdk.EqualVals(t, "/path", echo.Req.Path)
+					fdk.EqualVals(t, "POST", echo.Req.Method)
+
+					wantHeaders := make(http.Header)
+					wantHeaders.Set("X-Cs-Origin", "fooorigin")
+					wantHeaders.Set("X-Cs-Executionid", "exec_id")
+					wantHeaders.Set("X-Cs-Traceid", "trace_id")
+					containsHeaders(t, wantHeaders, echo.Req.Headers)
+				},
+			},
+			{
 				name: "simple PUT request should pass",
 				inputs: inputs{
 					body:   []byte(`{"dodgers":"still stink"}`),
@@ -850,7 +892,15 @@ integer: 1`,
 				path   string
 			}
 
-			wantFn func(t *testing.T, resp *http.Response, got fdk.File)
+			respBody struct {
+				ContentType string `json:"content_type"`
+				Encoding    string `json:"encoding"`
+				Filename    string `json:"filename"`
+				SHA256      string `json:"sha256"`
+				Size        int    `json:"size,string"`
+			}
+
+			wantFn func(t *testing.T, resp *http.Response, got respBody)
 		)
 
 		tests := []struct {
@@ -875,11 +925,13 @@ integer: 1`,
 					m.Post("/file", fdk.HandleFnOf(newFileHandler))
 					return m
 				},
-				want: func(t *testing.T, resp *http.Response, got fdk.File) {
+				want: func(t *testing.T, resp *http.Response, got respBody) {
 					fdk.EqualVals(t, 201, resp.StatusCode)
 
 					fdk.EqualVals(t, "application/json", got.ContentType)
 					fdk.EqualVals(t, "", got.Encoding)
+					fdk.EqualVals(t, "SqgS0EPNEPmkm4NrB9osqbE/bBoalfO9wJFqf3t7FI0=", got.SHA256)
+					fdk.EqualVals(t, 15, got.Size)
 
 					wantFilename := filepath.Join(tmp, "first_file.json")
 					fdk.EqualVals(t, wantFilename, got.Filename)
@@ -905,11 +957,13 @@ integer: 1`,
 					m.Post("/file", fdk.HandleFnOf(newFileHandler))
 					return m
 				},
-				want: func(t *testing.T, resp *http.Response, got fdk.File) {
+				want: func(t *testing.T, resp *http.Response, got respBody) {
 					fdk.EqualVals(t, 201, resp.StatusCode)
 
 					fdk.EqualVals(t, "application/json", got.ContentType)
 					fdk.EqualVals(t, "gzip", got.Encoding)
+					fdk.EqualVals(t, "AwAr4comqRgfR15a6F1PwfnjGmDMbdOgPe336J+puA4=", got.SHA256)
+					fdk.EqualVals(t, 19, got.Size)
 
 					wantFilename := filepath.Join(tmp, "second_file.json")
 					fdk.EqualVals(t, wantFilename, got.Filename)
@@ -932,11 +986,13 @@ integer: 1`,
 					m.Post("/compress-file", fdk.HandleFnOf(newGzippedFileHandler))
 					return m
 				},
-				want: func(t *testing.T, resp *http.Response, got fdk.File) {
+				want: func(t *testing.T, resp *http.Response, got respBody) {
 					fdk.EqualVals(t, 201, resp.StatusCode)
 
 					fdk.EqualVals(t, "application/json", got.ContentType)
 					fdk.EqualVals(t, "gzip", got.Encoding)
+					fdk.EqualVals(t, "H/NpL40Xq6xIVeD5ZOizqzXJzqRRYD4/a9cRG+0dAr0=", got.SHA256)
+					fdk.EqualVals(t, 49, got.Size)
 
 					wantFilename := filepath.Join(tmp, "third_file.json")
 					fdk.EqualVals(t, wantFilename, got.Filename)
@@ -975,7 +1031,7 @@ integer: 1`,
 				mustNoErr(t, err)
 
 				var got struct {
-					File fdk.File `json:"body"`
+					File respBody `json:"body"`
 				}
 				mustNoErr(t, json.Unmarshal(b, &got))
 
