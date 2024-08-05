@@ -2,6 +2,8 @@ package fdk
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,7 +44,7 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 
 		if f, ok := resp.Body.(File); ok {
 			f = NormalizeFile(f)
-			err := writeFile(logger, f.Contents, f.Filename)
+			sha256Hash, size, err := writeFile(logger, f.Contents, f.Filename)
 			if err != nil {
 				resp.Errors = append(resp.Errors, APIError{Code: http.StatusInternalServerError, Message: err.Error()})
 				writeErr := writeResponse(logger, w, resp)
@@ -51,8 +53,25 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 				}
 				return
 			}
-			f.Contents = nil
-			resp.Body = f
+			// the sha and size will be left to the runner to determine. This removes the chicken and egg
+			// problem where you need hte size and sha but want to work with the stream only. This isn't
+			// possible without having the runner do it. We can maintain streaming semantics while also
+			// obtaining our sha/size by extending the writer to support this when we're moving the
+			// contents to disk (or w/e sync we use)
+			respBody := struct {
+				ContentType string `json:"content_type"`
+				Encoding    string `json:"encoding"`
+				Filename    string `json:"filename"`
+				SHA256      string `json:"sha256_checksum"`
+				Size        int    `json:"size,string"`
+			}{
+				ContentType: f.ContentType,
+				Encoding:    f.Encoding,
+				Filename:    f.Filename,
+				SHA256:      sha256Hash,
+				Size:        size,
+			}
+			resp.Body = JSON(respBody)
 		}
 
 		err = writeResponse(logger, w, resp)
@@ -161,10 +180,10 @@ func writeResponse(logger *slog.Logger, w http.ResponseWriter, resp Response) er
 	return err
 }
 
-func writeFile(logger *slog.Logger, r io.ReadCloser, filename string) error {
+func writeFile(logger *slog.Logger, r io.ReadCloser, filename string) (string, int, error) {
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return fmt.Errorf("failed to open file: %w", err)
+		return "", 0, fmt.Errorf("failed to open file: %w", err)
 	}
 	defer func() {
 		// just in case
@@ -172,9 +191,12 @@ func writeFile(logger *slog.Logger, r io.ReadCloser, filename string) error {
 		_ = r.Close()
 	}()
 
-	_, err = io.Copy(f, r)
+	sizer, h := &sizeRecorder{w: f}, sha256.New()
+	mw := io.MultiWriter(sizer, h)
+
+	_, err = io.Copy(mw, r)
 	if err != nil {
-		return fmt.Errorf("failed to write contents to file: %w", err)
+		return "", 0, fmt.Errorf("failed to write contents to file: %w", err)
 	}
 
 	err = r.Close()
@@ -185,10 +207,11 @@ func writeFile(logger *slog.Logger, r io.ReadCloser, filename string) error {
 
 	err = f.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close file: %w", err)
+		return "", 0, fmt.Errorf("failed to close file: %w", err)
 	}
 
-	return nil
+	sha256Hash := base64.StdEncoding.EncodeToString(h.Sum(nil))
+	return sha256Hash, sizer.n, nil
 }
 
 func port() int {
@@ -196,4 +219,15 @@ func port() int {
 		return v
 	}
 	return 8081
+}
+
+type sizeRecorder struct {
+	w io.Writer
+	n int
+}
+
+func (s *sizeRecorder) Write(p []byte) (int, error) {
+	n, err := s.w.Write(p)
+	s.n += n
+	return n, err
 }
