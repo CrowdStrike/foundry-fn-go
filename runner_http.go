@@ -1,6 +1,7 @@
 package fdk
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -13,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,7 +29,16 @@ type runnerHTTP struct{}
 func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		r, err := toRequest(req)
+		defer func() {
+			if n, err := io.Copy(io.Discard, req.Body); err != nil {
+				logger.Error("failed to drain request body", "err", err.Error(), "bytes_drained", n)
+			}
+			if err := req.Body.Close(); err != nil {
+				logger.Error("failed to close request body", "err", err.Error())
+			}
+		}()
+
+		r, closeFn, err := toRequest(req)
 		if err != nil {
 			logger.Error("failed to create request", "err", err)
 			writeErr := writeResponse(logger, w, ErrResp(APIError{Code: http.StatusInternalServerError, Message: "unable to process incoming request"}))
@@ -36,6 +47,11 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 			}
 			return
 		}
+		defer func() {
+			if err := closeFn(); err != nil {
+				logger.Error("failed to close request body", "err", err.Error())
+			}
+		}()
 
 		const ctxKeyTraceID = "_traceid"
 		ctx = context.WithValue(ctx, ctxKeyTraceID, r.TraceID)
@@ -104,28 +120,15 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 	}
 }
 
-func toRequest(req *http.Request) (Request, error) {
-	var r struct {
-		FnID        string          `json:"fn_id"`
-		FnVersion   int             `json:"fn_version"`
-		Body        json.RawMessage `json:"body"`
-		Context     json.RawMessage `json:"context"`
-		AccessToken string          `json:"access_token"`
-		Method      string          `json:"method"`
-		Params      struct {
-			Header http.Header `json:"header"`
-			Query  url.Values  `json:"query"`
-		} `json:"params"`
-		URL     string `json:"url"`
-		TraceID string `json:"trace_id"`
-	}
-	payload, err := io.ReadAll(io.LimitReader(req.Body, 5*mb))
-	if err != nil {
-		return Request{}, fmt.Errorf("failed to read request body: %s", err)
+func toRequest(req *http.Request) (Request, func() error, error) {
+	fromFn := fromJSONReq
+	if strings.HasPrefix(req.Header.Get("Content-Type"), "multipart/form-data") {
+		fromFn = fromMultipartReq
 	}
 
-	if err = json.Unmarshal(payload, &r); err != nil {
-		return Request{}, fmt.Errorf("failed to unmarshal request body: %s", err)
+	r, body, err := fromFn(req)
+	if err != nil {
+		return Request{}, nil, fmt.Errorf("failed to prepare request: %w", err)
 	}
 
 	// Ensure headers are canonically formatted else header.Get("my-key") won't necessarily work.
@@ -137,10 +140,28 @@ func toRequest(req *http.Request) (Request, error) {
 	}
 	r.Params.Header = hCanon
 
-	out := Request{
+	return reqMetaToRequest(r, body), body.Close, nil
+}
+
+type reqMeta struct {
+	FnID        string          `json:"fn_id"`
+	FnVersion   int             `json:"fn_version"`
+	Context     json.RawMessage `json:"context"`
+	AccessToken string          `json:"access_token"`
+	Method      string          `json:"method"`
+	Params      struct {
+		Header http.Header `json:"header"`
+		Query  url.Values  `json:"query"`
+	} `json:"params"`
+	URL     string `json:"url"`
+	TraceID string `json:"trace_id"`
+}
+
+func reqMetaToRequest(r reqMeta, body io.Reader) Request {
+	return Request{
 		FnID:      r.FnID,
 		FnVersion: r.FnVersion,
-		Body:      r.Body,
+		Body:      body,
 		Context:   r.Context,
 		Params: struct {
 			Header http.Header
@@ -151,7 +172,43 @@ func toRequest(req *http.Request) (Request, error) {
 		TraceID:     r.TraceID,
 		AccessToken: r.AccessToken,
 	}
-	return out, nil
+}
+
+func fromMultipartReq(req *http.Request) (reqMeta, io.ReadCloser, error) {
+	meta := req.FormValue("meta")
+	if meta == "" {
+		return reqMeta{}, nil, errors.New("no meta field provided in multipart form submission")
+	}
+
+	var reqFn reqMeta
+	err := json.Unmarshal([]byte(meta), &reqFn)
+	if err != nil {
+		return reqMeta{}, nil, fmt.Errorf("failed to json unmarshal meta from multipart field: %w", err)
+	}
+
+	body, _, err := req.FormFile("body")
+	if err != nil {
+		return reqMeta{}, nil, fmt.Errorf("failed to read multipart body form file: %w", err)
+	}
+
+	return reqFn, body, nil
+}
+
+func fromJSONReq(req *http.Request) (reqMeta, io.ReadCloser, error) {
+	var r struct {
+		reqMeta
+		Body json.RawMessage `json:"body"`
+	}
+	payload, err := io.ReadAll(io.LimitReader(req.Body, 5*mb))
+	if err != nil {
+		return reqMeta{}, nil, fmt.Errorf("failed to read request body: %s", err)
+	}
+
+	if err = json.Unmarshal(payload, &r); err != nil {
+		return reqMeta{}, nil, fmt.Errorf("failed to unmarshal request body: %s", err)
+	}
+
+	return r.reqMeta, io.NopCloser(bytes.NewReader(r.Body)), nil
 }
 
 func writeResponse(logger *slog.Logger, w http.ResponseWriter, resp Response) error {

@@ -1108,18 +1108,20 @@ func newJSONBodyHandler(cfg config) fdk.Handler {
 			Message: "gots the error",
 		})
 	}
-	return fdk.HandleFnOf(func(ctx context.Context, r fdk.RequestOf[json.RawMessage]) fdk.Response {
-		return newEchoResp(ctx, cfg, fdk.Request(r))
+	return fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
+		return newEchoResp(ctx, cfg, r)
 	})
 }
 
 func newEchoResp(ctx context.Context, cfg config, r fdk.Request) fdk.Response {
 	traceID, _ := ctx.Value("_traceid").(string)
+	bodyB, _ := io.ReadAll(r.Body)
 	return fdk.Response{
+
 		Body: fdk.JSON(echoReq{
 			Config: cfg,
 			Req: echoInputs{
-				Body:        r.Body,
+				Body:        bodyB,
 				Context:     r.Context,
 				Headers:     r.Params.Header,
 				Queries:     r.Params.Query,

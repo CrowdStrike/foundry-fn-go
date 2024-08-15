@@ -1,6 +1,7 @@
 package fdktest_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -37,7 +38,7 @@ func TestHandlerSchemaOK(t *testing.T) {
 				req: fdk.Request{
 					URL:    "/",
 					Method: http.MethodPost,
-					Body:   json.RawMessage(`{"postalCode": "55755"}`),
+					Body:   bytes.NewReader(json.RawMessage(`{"postalCode": "55755"}`)),
 				},
 				reqSchema: `{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -83,7 +84,7 @@ func TestHandlerSchemaOK(t *testing.T) {
 				req: fdk.Request{
 					URL:    "/",
 					Method: http.MethodPost,
-					Body:   json.RawMessage(`{"postalCode": "5"}`),
+					Body:   bytes.NewReader(json.RawMessage(`{"postalCode": "5"}`)),
 				},
 				reqSchema: `{
   "$schema": "https://json-schema.org/draft/2020-12/schema",

@@ -1,6 +1,7 @@
 package fdk_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -36,7 +37,7 @@ func TestHandlerFnOfOK(t *testing.T) {
 	})
 	mustNoErr(t, err)
 
-	resp := h.Handle(context.TODO(), fdk.Request{Body: b})
+	resp := h.Handle(context.TODO(), fdk.Request{Body: bytes.NewReader(b)})
 	fdk.EqualVals(t, http.StatusInternalServerError, resp.Code)
 
 	wantErrs := []fdk.APIError{

@@ -2,14 +2,15 @@ package fdk
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 )
 
 type (
 	// Request defines a request structure that is given to the runner. The Body is set to
-	// json.RawMessage, to enable decoration/middleware.
-	Request RequestOf[json.RawMessage]
+	// io.Reader, to enable decoration/middleware.
+	Request RequestOf[io.Reader]
 
 	// RequestOf provides a generic body we can target our unmarshaling into.
 	RequestOf[T any] struct {

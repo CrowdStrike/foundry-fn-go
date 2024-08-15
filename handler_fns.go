@@ -20,7 +20,7 @@ func (h HandlerFn) Handle(ctx context.Context, r Request) Response {
 func HandleFnOf[T any](fn func(context.Context, RequestOf[T]) Response) Handler {
 	return HandlerFn(func(ctx context.Context, r Request) Response {
 		var v T
-		if err := json.Unmarshal(r.Body, &v); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
 			return Response{Errors: []APIError{{Code: http.StatusBadRequest, Message: "failed to unmarshal payload: " + err.Error()}}}
 		}
 
