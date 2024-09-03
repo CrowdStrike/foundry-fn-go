@@ -1,9 +1,11 @@
 package fdktest
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/xeipuuv/gojsonschema"
@@ -37,7 +39,7 @@ func HandlerSchemaOK(h fdk.Handler, r fdk.Request, reqSchema, respSchema string)
 			return fmt.Errorf("failed to marshal response payload: %w", err)
 		}
 
-		err = validateSchema(respSchema, b)
+		err = validateSchema(respSchema, bytes.NewReader(b))
 		if err != nil {
 			return fmt.Errorf("failed response schema validation: %w", err)
 		}
@@ -46,7 +48,8 @@ func HandlerSchemaOK(h fdk.Handler, r fdk.Request, reqSchema, respSchema string)
 	return nil
 }
 
-func validateSchema(schema string, payload []byte) error {
+func validateSchema(schema string, body io.Reader) error {
+	payload, _ := io.ReadAll(body)
 	result, err := gojsonschema.Validate(
 		gojsonschema.NewStringLoader(schema),
 		gojsonschema.NewBytesLoader(payload),
