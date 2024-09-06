@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	fdk "github.com/CrowdStrike/foundry-fn-go"
@@ -15,7 +16,7 @@ func main() {
 // newHandlerWithCfg here is showcasing a handler that does not utilize a config, so
 // it provides the SkipCfg as the config so no config load is attempted. This is the
 // minority of functions.
-func newHandler(context.Context, fdk.SkipCfg) fdk.Handler {
+func newHandler(context.Context, *slog.Logger, fdk.SkipCfg) fdk.Handler {
 	mux := fdk.NewMux()
 	mux.Get("/", fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
 		return fdk.Response{
