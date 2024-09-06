@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -567,7 +568,7 @@ integer: 1`,
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
-				addr := newServer(ctx, t, func(ctx context.Context, cfg config) fdk.Handler {
+				addr := newServer(ctx, t, func(ctx context.Context, _ *slog.Logger, cfg config) fdk.Handler {
 					return tt.newHandlerFn(ctx, cfg)
 				})
 
@@ -720,7 +721,7 @@ integer: 1`,
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
-				addr := newServer(ctx, t, func(ctx context.Context, cfg config) fdk.Handler {
+				addr := newServer(ctx, t, func(ctx context.Context, _ *slog.Logger, cfg config) fdk.Handler {
 					return tt.newHandlerFn(ctx, cfg)
 				})
 
@@ -840,7 +841,7 @@ integer: 1`,
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
-				addr := newServer(ctx, t, func(ctx context.Context, cfg fdk.SkipCfg) fdk.Handler {
+				addr := newServer(ctx, t, func(ctx context.Context, _ *slog.Logger, cfg fdk.SkipCfg) fdk.Handler {
 					return tt.newHandlerFn(ctx, cfg)
 				})
 
@@ -1006,7 +1007,7 @@ integer: 1`,
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
-				addr := newServer(ctx, t, func(ctx context.Context, _ fdk.SkipCfg) fdk.Handler {
+				addr := newServer(ctx, t, func(ctx context.Context, _ *slog.Logger, _ fdk.SkipCfg) fdk.Handler {
 					return tt.newHandlerFn(ctx)
 				})
 
@@ -1250,7 +1251,7 @@ func decodeJSON(t testing.TB, b []byte, v any) {
 	}
 }
 
-func newServer[CFG fdk.Cfg](ctx context.Context, t *testing.T, newHandlerFn func(context.Context, CFG) fdk.Handler) string {
+func newServer[CFG fdk.Cfg](ctx context.Context, t *testing.T, newHandlerFn func(context.Context, *slog.Logger, CFG) fdk.Handler) string {
 	t.Helper()
 
 	port := newIP(t)
@@ -1261,8 +1262,8 @@ func newServer[CFG fdk.Cfg](ctx context.Context, t *testing.T, newHandlerFn func
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		fdk.Run(ctx, func(ctx context.Context, cfg CFG) fdk.Handler {
-			h := newHandlerFn(ctx, cfg)
+		fdk.Run(ctx, func(ctx context.Context, logger *slog.Logger, cfg CFG) fdk.Handler {
+			h := newHandlerFn(ctx, logger, cfg)
 			close(readyChan)
 			return h
 		})

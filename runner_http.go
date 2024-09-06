@@ -24,11 +24,40 @@ const (
 	mb = 1 << 20
 )
 
-type runnerHTTP struct{}
+func runHTTP(ctx context.Context, newHandlerFn func(context.Context, *slog.Logger) Handler) {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true}))
 
-func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
+	handler := newHandlerFn(ctx, logger)
+
 	mux := http.NewServeMux()
-	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	mux.Handle("/", dispatchReq(logger, handler))
+
+	s := &http.Server{
+		Addr:           fmt.Sprintf(":%d", port()),
+		Handler:        mux,
+		MaxHeaderBytes: mb,
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+
+			logger.Info("shutting down HTTP server...")
+			if err := s.Shutdown(shutdownCtx); err != nil {
+				logger.Error("failed to shutdown server", "err", err)
+			}
+		}
+	}()
+
+	logger.Info("serving HTTP server on port " + strconv.Itoa(port()))
+	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		logger.Error("unexpected shutdown of server", "err", err)
+	}
+}
+
+func dispatchReq(logger *slog.Logger, handler Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		defer func() {
 			if n, err := io.Copy(io.Discard, req.Body); err != nil {
 				logger.Error("failed to drain request body", "err", err.Error(), "bytes_drained", n)
@@ -54,9 +83,9 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 		}()
 
 		const ctxKeyTraceID = "_traceid"
-		ctx = context.WithValue(ctx, ctxKeyTraceID, r.TraceID)
+		ctx := context.WithValue(req.Context(), ctxKeyTraceID, r.TraceID)
 
-		resp := h.Handle(ctx, r)
+		resp := handler.Handle(ctx, r)
 
 		if f, ok := resp.Body.(File); ok {
 			f = NormalizeFile(f)
@@ -94,30 +123,7 @@ func (r *runnerHTTP) Run(ctx context.Context, logger *slog.Logger, h Handler) {
 		if err != nil {
 			logger.Error("failed to write response", "err", err)
 		}
-	}))
-
-	s := &http.Server{
-		Addr:           fmt.Sprintf(":%d", port()),
-		Handler:        mux,
-		MaxHeaderBytes: mb,
-	}
-	go func() {
-		select {
-		case <-ctx.Done():
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer cancel()
-
-			logger.Info("shutting down HTTP server...")
-			if err := s.Shutdown(shutdownCtx); err != nil {
-				logger.Error("failed to shutdown server", "err", err)
-			}
-		}
-	}()
-
-	logger.Info("serving HTTP server on port " + strconv.Itoa(port()))
-	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		logger.Error("unexpected shutdown of server", "err", err)
-	}
+	})
 }
 
 func toRequest(req *http.Request) (Request, func() error, error) {
