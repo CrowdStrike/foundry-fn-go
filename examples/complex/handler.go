@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"os"
 
 	fdk "github.com/CrowdStrike/foundry-fn-go"
 )
@@ -17,8 +16,7 @@ func (c config) OK() error {
 	return nil
 }
 
-func newHandler(ctx context.Context, cfg config) fdk.Handler {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true}))
+func newHandler(_ context.Context, logger *slog.Logger, cfg config) fdk.Handler {
 	mux := fdk.NewMux()
 
 	h := handler{

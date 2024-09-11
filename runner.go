@@ -8,9 +8,7 @@ import (
 )
 
 // Runner defines the runtime that executes the request/response handler lifecycle.
-type Runner interface {
-	Run(ctx context.Context, logger *slog.Logger, h Handler)
-}
+type Runner func(ctx context.Context, newHandlerFn func(context.Context, *slog.Logger) Handler)
 
 // RegisterRunner registers a runner.
 func RegisterRunner(runnerType string, r Runner) {
@@ -21,7 +19,7 @@ func RegisterRunner(runnerType string, r Runner) {
 	runners[runnerType] = r
 }
 
-func run(ctx context.Context, logger *slog.Logger, h Handler) {
+func run(ctx context.Context, newHandlerFn func(context.Context, *slog.Logger) Handler) {
 	rt := os.Getenv("CS_RUNNER_TYPE")
 	if rt == "" {
 		rt = "http"
@@ -32,9 +30,9 @@ func run(ctx context.Context, logger *slog.Logger, h Handler) {
 		panic(fmt.Sprintf("invalid RUNNER_TYPE provided: %q", rt))
 	}
 
-	r.Run(ctx, logger, h)
+	r(ctx, newHandlerFn)
 }
 
-var runners = map[string]Runner{
-	"http": new(runnerHTTP),
+var runners = map[string]func(ctx context.Context, newHandlerFn func(context.Context, *slog.Logger) Handler){
+	"http": runHTTP,
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"os"
 	"runtime/debug"
 )
 
@@ -14,25 +13,25 @@ type Handler interface {
 }
 
 // Run is the meat and potatoes. This is the entrypoint for everything.
-func Run[T Cfg](ctx context.Context, newHandlerFn func(_ context.Context, cfg T) Handler) {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: true}))
-
-	var runFn Handler = HandlerFn(func(ctx context.Context, r Request) Response {
-		cfg, loadErr := readCfg[T](ctx)
-		if loadErr != nil {
-			if loadErr.err != nil {
-				logger.Error("failed to load config", "err", loadErr.err)
+func Run[T Cfg](ctx context.Context, newHandlerFn func(context.Context, *slog.Logger, T) Handler) {
+	run(ctx, func(ctx context.Context, logger *slog.Logger) Handler {
+		var runFn Handler = HandlerFn(func(ctx context.Context, r Request) Response {
+			cfg, loadErr := readCfg[T](ctx)
+			if loadErr != nil {
+				if loadErr.err != nil {
+					logger.Error("failed to load config", "err", loadErr.err)
+				}
+				return ErrResp(loadErr.apiErr)
 			}
-			return ErrResp(loadErr.apiErr)
-		}
 
-		h := newHandlerFn(ctx, cfg)
+			h := newHandlerFn(ctx, logger, cfg)
 
-		return h.Handle(ctx, r)
+			return h.Handle(ctx, r)
+		})
+		runFn = recoverer(logger)(runFn)
+
+		return runFn
 	})
-	runFn = recoverer(logger)(runFn)
-
-	run(ctx, logger, runFn)
 }
 
 func recoverer(logger *slog.Logger) func(Handler) Handler {
