@@ -1,6 +1,7 @@
 package fdk
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -246,12 +247,25 @@ func TestNormalizeFile(t *testing.T) {
 	}
 }
 
-func EqualVals[T comparable](t testing.TB, want, got T) bool {
+func EqualVals[T comparable](t testing.TB, want, got T, args ...any) bool {
 	t.Helper()
+
+	var errMsg string
+	if len(args) > 0 {
+		format, ok := args[0].(string)
+		if ok {
+			args = args[1:]
+			errMsg = fmt.Sprintf(format, args...)
+		}
+	}
 
 	match := want == got
 	if !match {
-		t.Errorf("values not equal:\n\t\twant:\t%#v\n\t\tgot:\t%#v", want, got)
+		msg := "values not equal:\n\twant:\t%#v\n\tgot:\t%#v"
+		if errMsg != "" {
+			msg += "\n\n\t" + errMsg
+		}
+		t.Errorf(msg, want, got)
 	}
 	return match
 }
