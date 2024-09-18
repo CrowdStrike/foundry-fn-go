@@ -17,7 +17,7 @@ func (h HandlerFn) Handle(ctx context.Context, r Request) Response {
 // HandleFnOf provides a means to translate the incoming requests to the destination body type.
 // This normalizes the sad path and provides the caller with a zero fuss request to work with. Reducing
 // json boilerplate for what is essentially the same operation on different types.
-func HandleFnOf[T any](fn func(context.Context, RequestOf[T]) Response) Handler {
+func HandleFnOf[T any](fn func(ctx context.Context, r RequestOf[T]) Response) Handler {
 	return HandlerFn(func(ctx context.Context, r Request) Response {
 		var v T
 		if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
@@ -25,6 +25,8 @@ func HandleFnOf[T any](fn func(context.Context, RequestOf[T]) Response) Handler 
 		}
 
 		return fn(ctx, RequestOf[T]{
+			FnID:        r.FnID,
+			FnVersion:   r.FnVersion,
 			Body:        v,
 			Context:     r.Context,
 			Params:      r.Params,
@@ -39,7 +41,7 @@ func HandleFnOf[T any](fn func(context.Context, RequestOf[T]) Response) Handler 
 // HandlerFnOfOK provides a means to translate the incoming requests to the destination body type
 // and execute validation on that type. This normalizes the sad path for both the unmarshalling of
 // the request body and the validation of that request type using its OK() method.
-func HandlerFnOfOK[T interface{ OK() []APIError }](fn func(context.Context, RequestOf[T]) Response) Handler {
+func HandlerFnOfOK[T interface{ OK() []APIError }](fn func(ctx context.Context, r RequestOf[T]) Response) Handler {
 	return HandleFnOf(func(ctx context.Context, r RequestOf[T]) Response {
 		if errs := r.Body.OK(); len(errs) > 0 {
 			return ErrResp(errs...)
@@ -71,7 +73,7 @@ type WorkflowCtx struct {
 // HandleWorkflow provides a means to create a handler with workflow integration. This function
 // does not have an opinion on the request body but does expect a workflow integration. Typically,
 // this is useful for DELETE/GET handlers.
-func HandleWorkflow(fn func(context.Context, Request, WorkflowCtx) Response) Handler {
+func HandleWorkflow(fn func(ctx context.Context, r Request, wrkCtx WorkflowCtx) Response) Handler {
 	return HandlerFn(func(ctx context.Context, r Request) Response {
 		var w WorkflowCtx
 		if err := json.Unmarshal(r.Context, &w); err != nil {
@@ -85,7 +87,7 @@ func HandleWorkflow(fn func(context.Context, Request, WorkflowCtx) Response) Han
 // HandleWorkflowOf provides a means to create a handler with Workflow integration. This
 // function is useful when you expect a request body and have workflow integrations. Typically, this
 // is with PATCH/POST/PUT handlers.
-func HandleWorkflowOf[T any](fn func(context.Context, RequestOf[T], WorkflowCtx) Response) Handler {
+func HandleWorkflowOf[T any](fn func(ctx context.Context, r RequestOf[T], wrkCtx WorkflowCtx) Response) Handler {
 	return HandleWorkflow(func(ctx context.Context, r Request, workflowCtx WorkflowCtx) Response {
 		next := HandleFnOf(func(ctx context.Context, r RequestOf[T]) Response {
 			return fn(ctx, r, workflowCtx)
