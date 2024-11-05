@@ -59,7 +59,7 @@ func (h *handler) registerRoutes(mux *fdk.Mux) {
 }
 
 func (h *handler) getPeople(ctx context.Context, r fdk.Request) fdk.Response {
-	names := r.Params.Query["name"]
+	names := r.Queries["name"]
 
 	people, err := h.repo.ReadPeople(ctx, names...)
 	if err != nil {

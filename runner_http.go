@@ -139,12 +139,12 @@ func toRequest(req *http.Request) (Request, func() error, error) {
 
 	// Ensure headers are canonically formatted else header.Get("my-key") won't necessarily work.
 	hCanon := make(http.Header)
-	for k, v := range r.Params.Header {
+	for k, v := range r.Headers {
 		for _, s := range v {
 			hCanon.Add(k, s)
 		}
 	}
-	r.Params.Header = hCanon
+	r.Headers = hCanon
 
 	return reqMetaToRequest(r, body), body.Close, nil
 }
@@ -155,24 +155,20 @@ type reqMeta struct {
 	Context     json.RawMessage `json:"context"`
 	AccessToken string          `json:"access_token"`
 	Method      string          `json:"method"`
-	Params      struct {
-		Header http.Header `json:"header"`
-		Query  url.Values  `json:"query"`
-	} `json:"params"`
-	URL     string `json:"url"`
-	TraceID string `json:"trace_id"`
+	Headers     http.Header     `json:"header"`
+	Queries     url.Values      `json:"query"`
+	URL         string          `json:"url"`
+	TraceID     string          `json:"trace_id"`
 }
 
 func reqMetaToRequest(r reqMeta, body io.Reader) Request {
 	return Request{
-		FnID:      r.FnID,
-		FnVersion: r.FnVersion,
-		Body:      body,
-		Context:   r.Context,
-		Params: struct {
-			Header http.Header
-			Query  url.Values
-		}{Header: r.Params.Header, Query: r.Params.Query},
+		FnID:        r.FnID,
+		FnVersion:   r.FnVersion,
+		Body:        body,
+		Context:     r.Context,
+		Headers:     r.Headers,
+		Queries:     r.Queries,
 		Method:      r.Method,
 		URL:         r.URL,
 		TraceID:     r.TraceID,

@@ -19,11 +19,9 @@ type (
 
 		Body T
 
-		Context json.RawMessage
-		Params  struct {
-			Header http.Header
-			Query  url.Values
-		}
+		Context     json.RawMessage
+		Headers     http.Header
+		Queries     url.Values
 		URL         string
 		Method      string
 		AccessToken string

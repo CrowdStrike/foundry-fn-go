@@ -30,12 +30,10 @@ func TestRun_httprunner(t *testing.T) {
 		FnID        string          `json:"fn_id"`
 		FnVersion   int             `json:"fn_version"`
 		Method      string          `json:"method"`
-		Params      struct {
-			Header http.Header `json:"header"`
-			Query  url.Values  `json:"query"`
-		} `json:"params"`
-		URL     string `json:"url"`
-		TraceID string `json:"trace_id"`
+		Header      http.Header     `json:"header"`
+		Query       url.Values      `json:"query"`
+		URL         string          `json:"url"`
+		TraceID     string          `json:"trace_id"`
 	}
 
 	t.Run("when executing provided handler with successful startup", func(t *testing.T) {
@@ -573,14 +571,9 @@ integer: 1`,
 				})
 
 				body := testReq{
-					Body: tt.inputs.body,
-					Params: struct {
-						Header http.Header `json:"header"`
-						Query  url.Values  `json:"query"`
-					}{
-						Header: tt.inputs.headers,
-						Query:  tt.inputs.queryParams,
-					},
+					Body:        tt.inputs.body,
+					Header:      tt.inputs.headers,
+					Query:       tt.inputs.queryParams,
 					URL:         tt.inputs.path,
 					Method:      tt.inputs.method,
 					Context:     tt.inputs.context,
@@ -1124,8 +1117,8 @@ func newEchoResp(ctx context.Context, cfg config, r fdk.Request) fdk.Response {
 			Req: echoInputs{
 				Body:        bodyB,
 				Context:     r.Context,
-				Headers:     r.Params.Header,
-				Queries:     r.Params.Query,
+				Headers:     r.Headers,
+				Queries:     r.Queries,
 				Path:        r.URL,
 				Method:      r.Method,
 				AccessToken: r.AccessToken,
