@@ -37,13 +37,8 @@ func TestHandlers(t *testing.T) {
 		return fdk.Response{Code: 200, Body: fdk.JSON(r)}
 	}))
 
-	params := struct {
-		Header http.Header
-		Query  url.Values
-	}{
-		Header: http.Header{"X-Cs-Foo": []string{"header"}},
-		Query:  url.Values{"key": []string{"value"}},
-	}
+	headers := http.Header{"X-Cs-Foo": []string{"header"}}
+	queries := url.Values{"key": []string{"value"}}
 
 	wrkCtxVal, err := json.Marshal(fdk.WorkflowCtx{
 		ActivityExecID:    "act-exec-id",
@@ -63,7 +58,8 @@ func TestHandlers(t *testing.T) {
 			Body:        strings.NewReader(`{"name":"frodo"}`),
 			Context:     json.RawMessage(`{"some":"ctx"}`),
 			URL:         "/handler-fn-of",
-			Params:      params,
+			Headers:     headers,
+			Queries:     queries,
 			Method:      "POST",
 			AccessToken: "access",
 			TraceID:     "trace-id",
@@ -81,8 +77,8 @@ func TestHandlers(t *testing.T) {
 		fdk.EqualVals(t, "/handler-fn-of", got.URL)
 		fdk.EqualVals(t, "POST", got.Method)
 		fdk.EqualVals(t, `{"some":"ctx"}`, string(got.Context))
-		fdk.EqualVals(t, "header", got.Params.Header.Get("X-Cs-Foo"))
-		fdk.EqualVals(t, "value", got.Params.Query.Get("key"))
+		fdk.EqualVals(t, "header", got.Headers.Get("X-Cs-Foo"))
+		fdk.EqualVals(t, "value", got.Queries.Get("key"))
 		fdk.EqualVals(t, "access", got.AccessToken)
 		fdk.EqualVals(t, "trace-id", got.TraceID)
 
@@ -98,7 +94,8 @@ func TestHandlers(t *testing.T) {
 				Body:        strings.NewReader(`{"name":"frodo"}`),
 				Context:     json.RawMessage(`{"some":"ctx"}`),
 				URL:         "/handle-fn-of-ok",
-				Params:      params,
+				Headers:     headers,
+				Queries:     queries,
 				Method:      "POST",
 				AccessToken: "access",
 				TraceID:     "trace-id",
@@ -116,8 +113,8 @@ func TestHandlers(t *testing.T) {
 			fdk.EqualVals(t, "/handle-fn-of-ok", got.URL)
 			fdk.EqualVals(t, "POST", got.Method)
 			fdk.EqualVals(t, `{"some":"ctx"}`, string(got.Context))
-			fdk.EqualVals(t, "header", got.Params.Header.Get("X-Cs-Foo"))
-			fdk.EqualVals(t, "value", got.Params.Query.Get("key"))
+			fdk.EqualVals(t, "header", got.Headers.Get("X-Cs-Foo"))
+			fdk.EqualVals(t, "value", got.Queries.Get("key"))
 			fdk.EqualVals(t, "access", got.AccessToken)
 			fdk.EqualVals(t, "trace-id", got.TraceID)
 
@@ -145,7 +142,8 @@ func TestHandlers(t *testing.T) {
 			FnVersion:   1,
 			Context:     wrkCtxVal,
 			URL:         "/handle-workflow",
-			Params:      params,
+			Headers:     headers,
+			Queries:     queries,
 			Method:      "GET",
 			AccessToken: "access",
 			TraceID:     "trace-id",
@@ -163,8 +161,8 @@ func TestHandlers(t *testing.T) {
 		fdk.EqualVals(t, "/handle-workflow", got.URL)
 		fdk.EqualVals(t, "GET", got.Method)
 		fdk.EqualVals(t, string(wrkCtxVal), string(got.Context))
-		fdk.EqualVals(t, "header", got.Params.Header.Get("X-Cs-Foo"))
-		fdk.EqualVals(t, "value", got.Params.Query.Get("key"))
+		fdk.EqualVals(t, "header", got.Headers.Get("X-Cs-Foo"))
+		fdk.EqualVals(t, "value", got.Queries.Get("key"))
 		fdk.EqualVals(t, "access", got.AccessToken)
 		fdk.EqualVals(t, "trace-id", got.TraceID)
 	})
@@ -176,7 +174,8 @@ func TestHandlers(t *testing.T) {
 			Body:        strings.NewReader(`{"name":"frodo"}`),
 			Context:     wrkCtxVal,
 			URL:         "/handle-workflow-of",
-			Params:      params,
+			Headers:     headers,
+			Queries:     queries,
 			Method:      "PUT",
 			AccessToken: "access",
 			TraceID:     "trace-id",
@@ -194,8 +193,8 @@ func TestHandlers(t *testing.T) {
 		fdk.EqualVals(t, "/handle-workflow-of", got.URL)
 		fdk.EqualVals(t, "PUT", got.Method)
 		fdk.EqualVals(t, string(wrkCtxVal), string(got.Context))
-		fdk.EqualVals(t, "header", got.Params.Header.Get("X-Cs-Foo"))
-		fdk.EqualVals(t, "value", got.Params.Query.Get("key"))
+		fdk.EqualVals(t, "header", got.Headers.Get("X-Cs-Foo"))
+		fdk.EqualVals(t, "value", got.Queries.Get("key"))
 		fdk.EqualVals(t, "access", got.AccessToken)
 		fdk.EqualVals(t, "trace-id", got.TraceID)
 
