@@ -74,9 +74,9 @@ func WantFileMatch(t *testing.T, body json.Marshaler, want fdk.File) {
 
 	f := WantFile(t, body)
 
-	eq(t, want.ContentType, f.ContentType, "ContentType")
-	eq(t, want.Encoding, f.Encoding, "Encoding")
-	eq(t, want.Filename, f.Filename, "Filename")
+	eq(t, "", want.ContentType, f.ContentType, "ContentType")
+	eq(t, "", want.Encoding, f.Encoding, "Encoding")
+	eq(t, "", want.Filename, f.Filename, "Filename")
 
 	wantContents, err := io.ReadAll(want.Contents)
 	mustNoErr(t, err)
@@ -84,17 +84,17 @@ func WantFileMatch(t *testing.T, body json.Marshaler, want fdk.File) {
 	gotContents, err := io.ReadAll(f.Contents)
 	mustNoErr(t, err)
 
-	eq(t, string(wantContents), string(gotContents), "Contents")
+	eq(t, "", string(wantContents), string(gotContents), "Contents")
 }
 
-func eq[T comparable](t *testing.T, want, got T, label string) {
+func eq[T comparable](t *testing.T, line string, want, got T, label string) {
 	t.Helper()
 
 	if want == got {
 		return
 	}
 
-	t.Errorf("%s values do not match:\n\t\twant:\t%+v\n\t\tgot:\t%+v", label, want, got)
+	t.Errorf("%s values do not match:\n\t\twant:\t%+v\n\t\tgot:\t%+v\n\t\tsource: %s", label, want, got, line)
 }
 
 func mustNoErr(t *testing.T, err error) {
