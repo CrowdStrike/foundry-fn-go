@@ -170,7 +170,7 @@ func newHandler(_ context.Context, _ *slog.Logger, cfg config) fdk.Handler {
 	mux.Post("/echo", fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
 		client, err := newFalconClient(ctx, r.AccessToken)
 		if err != nil {
-			return fdk.Response{ Code: 500, Body: fdk.JSON(err) }
+			return fdk.ErrResp(fdk.APIError{Code: 500, Message: err.Error()})
 		}
 
 		// we have a valid gofalcon client
