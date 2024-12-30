@@ -27,7 +27,6 @@ func FalconClientOpts() (out struct {
 	UserAgent string
 }) {
 	c := strings.ToLower(os.Getenv("CS_CLOUD"))
-	c = strings.ReplaceAll(c, "-", "")
 	c = strings.TrimSpace(c)
 	if c == "" {
 		c = "us-1"
