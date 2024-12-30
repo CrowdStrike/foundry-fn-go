@@ -97,28 +97,28 @@ func (c config) OK() error {
 
 1. `config`: A type the raw json config is unmarshalled into.
 2. `logger`: A dedicated logger is provided to capture function logs in all environments (both locally and distributed).
-    1. Using a different logger may produce logs in the runtime but won't make it into the logscale infrastructure.
+   1. Using a different logger may produce logs in the runtime but won't make it into the logscale infrastructure.
 3. `Request`: Request payload and metadata. At the time of this writing, the `Request` struct consists of:
-    1. `Body`:  The input io.Reader for the payload as given in the Function Gateway `body` payload field or streamed
-       in.
-    2. `Params`: Contains request headers and query parameters.
-    3. `URL`: The request path relative to the function as a string.
-    4. `Method`: The request HTTP method or verb.
-    5. `Context`: Caller-supplied raw context.
-    6. `AccessToken`: Caller-supplied access token.
+   1. `Body`: The input io.Reader for the payload as given in the Function Gateway `body` payload field or streamed
+      in.
+   2. `Params`: Contains request headers and query parameters.
+   3. `URL`: The request path relative to the function as a string.
+   4. `Method`: The request HTTP method or verb.
+   5. `Context`: Caller-supplied raw context.
+   6. `AccessToken`: Caller-supplied access token.
 4. `RequestOf`: The same as Request only that the Body field is json unmarshalled into the generic type (i.e. `request`
    type above)
 5. `Response`
-    1. The `Response` contains fields `Body` (the payload of the response), `Code` (an HTTP status code),
-       `Errors` (a slice of `APIError`s), and `Headers` (a map of any special HTTP headers which should be present on
-       the response).
+   1. The `Response` contains fields `Body` (the payload of the response), `Code` (an HTTP status code),
+      `Errors` (a slice of `APIError`s), and `Headers` (a map of any special HTTP headers which should be present on
+      the response).
 6. `main()`: Initialization and bootstrap logic all contained with fdk.Run and handler constructor.
 
 more examples can be found at:
 
-* [fn with config](examples/fn_config)
-* [fn without config](examples/fn_no_config)
-* [more complex/complete example](examples/complex)
+- [fn with config](examples/fn_config)
+- [fn without config](examples/fn_no_config)
+- [more complex/complete example](examples/complex)
 
 ### Testing locally
 
@@ -161,8 +161,8 @@ import (
 	"log/slog"
 
 	fdk "github.com/CrowdStrike/foundry-fn-go"
-	"github.com/CrowdStrike/gofalcon/falcon"
-	"github.com/CrowdStrike/gofalcon/falcon/client"
+	"github.com/crowdstrike/gofalcon/falcon"
+	"github.com/crowdstrike/gofalcon/falcon/client"
 )
 
 func newHandler(_ context.Context, _ *slog.Logger, cfg config) fdk.Handler {
@@ -170,14 +170,10 @@ func newHandler(_ context.Context, _ *slog.Logger, cfg config) fdk.Handler {
 	mux.Post("/echo", fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
 		client, err := newFalconClient(ctx, r.AccessToken)
 		if err != nil {
-			if err == falcon.ErrFalconNoToken {
-				// not a processable request
-				return fdk.Response{ /* snip */ }
-			}
-			// some other error - see gofalcon documentation
+			return fdk.ErrResp(fdk.APIError{Code: 500, Message: err.Error()})
 		}
 
-		// trim rest
+		// we have a valid gofalcon client
 	}))
 	return mux
 }
@@ -188,7 +184,7 @@ func newFalconClient(ctx context.Context, token string) (*client.CrowdStrikeAPIS
 		AccessToken:       token,
 		Cloud:             falcon.Cloud(opts.Cloud),
 		Context:           ctx,
-		UserAgentOverride: out.UserAgent,
+		UserAgentOverride: opts.UserAgent,
 	})
 }
 
