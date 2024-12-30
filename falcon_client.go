@@ -19,7 +19,7 @@ var version = "development"
 //			AccessToken:       token,
 //			Cloud:             falcon.Cloud(opts.Cloud),
 //			Context:           ctx,
-//			UserAgentOverride: out.UserAgent,
+//			UserAgentOverride: opts.UserAgent,
 //		})
 //	}
 func FalconClientOpts() (out struct {
@@ -27,7 +27,6 @@ func FalconClientOpts() (out struct {
 	UserAgent string
 }) {
 	c := strings.ToLower(os.Getenv("CS_CLOUD"))
-	c = strings.ReplaceAll(c, "-", "")
 	c = strings.TrimSpace(c)
 	if c == "" {
 		c = "us-1"
