@@ -6,12 +6,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -601,6 +604,178 @@ integer: 1`,
 		}
 	})
 
+	t.Run("when using handlers which accept files", func(t *testing.T) {
+		type fileResp struct {
+			Code    int               `json:"code"`
+			Errs    []fdk.APIError    `json:"errors"`
+			Headers http.Header       `json:"headers"`
+			Body    map[string]string `json:"body"`
+		}
+
+		tests := []struct {
+			name         string
+			newHandlerFn func() fdk.Handler
+			inputBuff    func() (*bytes.Buffer, string, error)
+			want         func(t *testing.T, resp *http.Response, got fileResp)
+		}{
+			{
+				name: "single file input should pass",
+				inputBuff: func() (*bytes.Buffer, string, error) {
+					var b bytes.Buffer
+					w := multipart.NewWriter(&b)
+
+					fw, err := w.CreateFormField("meta")
+					mustNoErr(t, err)
+					_, err = fw.Write([]byte(`{"method":"POST", "url":"/my-endpoint"}`))
+					mustNoErr(t, err)
+
+					fp := mustOpen(t, "./testdata/lorem-ipsum-1.txt")
+					defer func(t *testing.T, fp *os.File) {
+						mustNoErr(t, fp.Close())
+					}(t, fp)
+
+					fw, err = w.CreateFormFile("body", fp.Name())
+					mustNoErr(t, err)
+					_, err = io.Copy(fw, fp)
+					mustNoErr(t, err)
+
+					err = w.Close()
+					if err != nil {
+						return nil, "", err
+					}
+
+					return &b, w.FormDataContentType(), nil
+				},
+				newHandlerFn: newSingleFileHandler,
+				want: func(t *testing.T, resp *http.Response, got fileResp) {
+					t.Helper()
+
+					fdk.EqualVals(t, 200, resp.StatusCode)
+					fdk.EqualVals(t, 200, got.Code)
+					fdk.EqualVals(t, "Lorem ipsum dolor sit amet, consectetur adipiscing elit.", got.Body["fileContents"])
+				},
+			},
+			{
+				name: "multiple file inputs should pass",
+				inputBuff: func() (*bytes.Buffer, string, error) {
+					var b bytes.Buffer
+					w := multipart.NewWriter(&b)
+
+					fw, err := w.CreateFormField("meta")
+					mustNoErr(t, err)
+					_, err = fw.Write([]byte(`{"method":"POST", "url":"/my-endpoint"}`))
+					mustNoErr(t, err)
+
+					for i := 1; i <= 3; i++ {
+						fieldName := fmt.Sprintf("file%d", i)
+						filePath := fmt.Sprintf("./testdata/lorem-ipsum-%d.txt", i)
+
+						fp := mustOpen(t, filePath)
+						defer func(t *testing.T, fp *os.File) {
+							mustNoErr(t, fp.Close())
+						}(t, fp)
+
+						fw, err = w.CreateFormFile(fieldName, fp.Name())
+						mustNoErr(t, err)
+						_, err = io.Copy(fw, fp)
+						mustNoErr(t, err)
+					}
+
+					err = w.Close()
+					if err != nil {
+						return nil, "", err
+					}
+
+					return &b, w.FormDataContentType(), nil
+				},
+				newHandlerFn: newMultipleFileHandler,
+				want: func(t *testing.T, resp *http.Response, got fileResp) {
+					t.Helper()
+
+					fdk.EqualVals(t, 200, resp.StatusCode)
+					fdk.EqualVals(t, 200, got.Code)
+					fdk.EqualVals(t, "166", got.Body["charCount"])
+				},
+			},
+			{
+				name: "complex inputs should pass",
+				inputBuff: func() (*bytes.Buffer, string, error) {
+					var b bytes.Buffer
+					w := multipart.NewWriter(&b)
+
+					fw, err := w.CreateFormField("meta")
+					mustNoErr(t, err)
+					_, err = fw.Write([]byte(`{"method":"POST", "url":"/my-endpoint"}`))
+					mustNoErr(t, err)
+
+					fw, err = w.CreateFormField("body")
+					mustNoErr(t, err)
+					_, err = fw.Write([]byte(`{"age":35}`))
+					mustNoErr(t, err)
+
+					for i := 1; i <= 3; i++ {
+						fieldName := fmt.Sprintf("file%d", i)
+						filePath := fmt.Sprintf("./testdata/lorem-ipsum-%d.txt", i)
+
+						fp := mustOpen(t, filePath)
+						defer func(t *testing.T, fp *os.File) {
+							mustNoErr(t, fp.Close())
+						}(t, fp)
+
+						fw, err = w.CreateFormFile(fieldName, fp.Name())
+						mustNoErr(t, err)
+						_, err = io.Copy(fw, fp)
+						mustNoErr(t, err)
+					}
+
+					err = w.Close()
+					if err != nil {
+						return nil, "", err
+					}
+
+					return &b, w.FormDataContentType(), nil
+				},
+				newHandlerFn: newComplexMultipleFileHandler,
+				want: func(t *testing.T, resp *http.Response, got fileResp) {
+					t.Helper()
+
+					fdk.EqualVals(t, 200, resp.StatusCode)
+					fdk.EqualVals(t, 200, got.Code)
+					fdk.EqualVals(t, "166", got.Body["charCount"])
+					fdk.EqualVals(t, "35", got.Body["age"])
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				buff, ct, err := tt.inputBuff()
+				mustNoErr(t, err)
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
+				addr := newServer(ctx, t, func(context.Context, *slog.Logger, fdk.SkipCfg) fdk.Handler {
+					return tt.newHandlerFn()
+				})
+
+				req, err := http.NewRequestWithContext(ctx, http.MethodPost, addr, buff)
+				mustNoErr(t, err)
+				req.Header.Set("Content-Type", ct)
+
+				resp, err := http.DefaultClient.Do(req)
+				mustNoErr(t, err)
+				cancel()
+				defer func() { _ = resp.Body.Close() }()
+
+				var got fileResp
+				decodeBody(t, resp.Body, &got)
+
+				tt.want(t, resp, got)
+			})
+		}
+	})
+
 	t.Run("when calling healthz handlers", func(t *testing.T) {
 		type (
 			inputs struct {
@@ -1131,6 +1306,92 @@ func newEchoResp(ctx context.Context, cfg config, r fdk.Request) fdk.Response {
 	}
 }
 
+func newSingleFileHandler() fdk.Handler {
+	return fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			return fdk.ErrResp(fdk.APIError{
+				Code:    500,
+				Message: fmt.Sprintf("failed to read payload with error: %s", err),
+			})
+		}
+
+		return fdk.Response{
+			Body:   fdk.JSON(map[string]string{"fileContents": string(b)}),
+			Code:   200,
+			Header: http.Header{"X-Fn-Method": []string{r.Method}},
+		}
+	})
+}
+
+func newMultipleFileHandler() fdk.Handler {
+	return fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
+		c, ok := r.Body.(*fdk.ComplexPayload)
+		if !ok {
+			return fdk.ErrResp(fdk.APIError{
+				Code:    500,
+				Message: "payload cannot be cast to *fdk.ComplexPayload",
+			})
+		}
+
+		count := 0
+		for _, rdr := range c.Files {
+			b, err := io.ReadAll(rdr)
+			if err != nil {
+				return fdk.ErrResp(fdk.APIError{
+					Code:    500,
+					Message: fmt.Sprintf("failed to read payload with error: %s", err),
+				})
+			}
+			count += len(string(b))
+		}
+
+		return fdk.Response{
+			Body:   fdk.JSON(map[string]string{"charCount": fmt.Sprintf("%d", count)}),
+			Code:   200,
+			Header: http.Header{"X-Fn-Method": []string{r.Method}},
+		}
+	})
+}
+
+func newComplexMultipleFileHandler() fdk.Handler {
+	return fdk.HandlerFn(func(ctx context.Context, r fdk.Request) fdk.Response {
+		c, ok := r.Body.(*fdk.ComplexPayload)
+		if !ok {
+			return fdk.ErrResp(fdk.APIError{
+				Code:    500,
+				Message: "payload cannot be cast to *fdk.ComplexPayload",
+			})
+		}
+
+		count := 0
+		for _, rdr := range c.Files {
+			b, err := io.ReadAll(rdr)
+			if err != nil {
+				return fdk.ErrResp(fdk.APIError{
+					Code:    500,
+					Message: fmt.Sprintf("failed to read payload with error: %s", err),
+				})
+			}
+			count += len(string(b))
+		}
+
+		var body struct {
+			Age int `json:"age"`
+		}
+		_ = json.Unmarshal(c.Body, &body)
+
+		return fdk.Response{
+			Body: fdk.JSON(map[string]string{
+				"charCount": fmt.Sprintf("%d", count),
+				"age":       fmt.Sprintf("%d", body.Age),
+			}),
+			Code:   200,
+			Header: http.Header{"X-Fn-Method": []string{r.Method}},
+		}
+	})
+}
+
 type fileInReq struct {
 	ContentType  string `json:"content_type"`
 	DestFilename string `json:"destination_filename"`
@@ -1205,6 +1466,14 @@ func mustNoErr(t testing.TB, err error) {
 	if err != nil {
 		t.Fatalf("received unexpected err:\n\t\tgot:\t%s", err)
 	}
+}
+
+func mustOpen(t testing.TB, s string) *os.File {
+	t.Helper()
+
+	fp, err := os.Open(path.Clean(s))
+	mustNoErr(t, err)
+	return fp
 }
 
 func containsHeaders(t testing.TB, want http.Header, got http.Header) {
