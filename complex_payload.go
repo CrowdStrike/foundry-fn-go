@@ -28,7 +28,7 @@ func (c *ComplexPayload) Close() error {
 		return nil
 	}
 
-	var errs error
+	var errs []error
 
 	for k, v := range c.Files {
 		if v == nil {
@@ -39,9 +39,9 @@ func (c *ComplexPayload) Close() error {
 			continue
 		}
 		if err := vc.Close(); err != nil {
-			errs = errors.Join(errs, fmt.Errorf("failed to close %s: %w", k, err))
+			errs = append(errs, fmt.Errorf("failed to close %s: %w", k, err))
 		}
 	}
 
-	return errs
+	return errors.Join(errs...)
 }

@@ -199,7 +199,8 @@ func fromMultipartReq(req *http.Request) (reqMeta, io.ReadCloser, error) {
 
 	mpf := req.MultipartForm
 	if isComplexMultipartReq(mpf) {
-		return fromComplexMultipartReq(reqFn, mpf)
+		c, err := fromComplexMultipartReq(mpf)
+		return reqFn, c, err
 	}
 
 	body, _, err := req.FormFile("body")
@@ -216,7 +217,7 @@ func isComplexMultipartReq(m *multipart.Form) bool {
 	return len(f) > 1 || (len(f) >= 1 && len(v) > 1)
 }
 
-func fromComplexMultipartReq(reqFn reqMeta, m *multipart.Form) (reqMeta, *ComplexPayload, error) {
+func fromComplexMultipartReq(m *multipart.Form) (*ComplexPayload, error) {
 	c := &ComplexPayload{
 		Body:  nil,
 		Files: make(map[string]io.Reader),
@@ -232,13 +233,13 @@ func fromComplexMultipartReq(reqFn reqMeta, m *multipart.Form) (reqMeta, *Comple
 		for _, header := range f {
 			f0, err := header.Open()
 			if err != nil {
-				return reqMeta{}, c, fmt.Errorf("failed to read multipart body form file %s: %w", header.Filename, err)
+				return c, fmt.Errorf("failed to read multipart body form file %s: %w", header.Filename, err)
 			}
 			c.Files[header.Filename] = f0
 		}
 	}
 
-	return reqFn, c, nil
+	return c, nil
 }
 
 func fromJSONReq(req *http.Request) (reqMeta, io.ReadCloser, error) {
