@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -69,6 +70,14 @@ func dispatchReq(logger *slog.Logger, handler Handler) http.Handler {
 
 		r, closeFn, err := toRequest(req)
 		if err != nil {
+			defer func() {
+				if closeFn == nil {
+					return
+				}
+				if err := closeFn(); err != nil {
+					logger.Error("failed to close request body", "err", err.Error())
+				}
+			}()
 			logger.Error("failed to create request", "err", err)
 			writeErr := writeResponse(logger, w, ErrResp(APIError{Code: http.StatusInternalServerError, Message: "unable to process incoming request"}))
 			if writeErr != nil {
@@ -188,12 +197,49 @@ func fromMultipartReq(req *http.Request) (reqMeta, io.ReadCloser, error) {
 		return reqMeta{}, nil, fmt.Errorf("failed to json unmarshal meta from multipart field: %w", err)
 	}
 
+	mpf := req.MultipartForm
+	if isComplexMultipartReq(mpf) {
+		c, err := fromComplexMultipartReq(mpf)
+		return reqFn, c, err
+	}
+
 	body, _, err := req.FormFile("body")
 	if err != nil {
 		return reqMeta{}, nil, fmt.Errorf("failed to read multipart body form file: %w", err)
 	}
 
 	return reqFn, body, nil
+}
+
+func isComplexMultipartReq(m *multipart.Form) bool {
+	f, v := m.File, m.Value
+	// Multiple files or (at least one file and a value other than "meta").
+	return len(f) > 1 || (len(f) >= 1 && len(v) > 1)
+}
+
+func fromComplexMultipartReq(m *multipart.Form) (*ComplexPayload, error) {
+	c := &ComplexPayload{
+		Body:  nil,
+		Files: make(map[string]io.Reader),
+	}
+
+	if b, ok := m.Value["body"]; ok {
+		if len(b) > 0 {
+			c.Body = []byte(b[0])
+		}
+	}
+
+	for _, f := range m.File {
+		for _, header := range f {
+			f0, err := header.Open()
+			if err != nil {
+				return c, fmt.Errorf("failed to read multipart body form file %s: %w", header.Filename, err)
+			}
+			c.Files[header.Filename] = f0
+		}
+	}
+
+	return c, nil
 }
 
 func fromJSONReq(req *http.Request) (reqMeta, io.ReadCloser, error) {

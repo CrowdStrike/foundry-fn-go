@@ -116,9 +116,12 @@ func (c config) OK() error {
 
 more examples can be found at:
 
-- [fn with config](examples/fn_config)
-- [fn without config](examples/fn_no_config)
-- [more complex/complete example](examples/complex)
+- [Function with config](examples/fn_config)
+- [Function without config](examples/fn_no_config)
+- [More complex/complete example](examples/complex)
+- [Function with file as input](examples/single_file_input)
+- [Function with multiple files as input](examples/multiple_file_input)
+- [Function with mixed input (file(s) and JSON input)](examples/complex_inputs)
 
 ### Testing locally
 
