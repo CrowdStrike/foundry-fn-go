@@ -278,6 +278,7 @@ func writeResponse(logger *slog.Logger, w http.ResponseWriter, resp Response) er
 		return nil
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	if code := resp.StatusCode(); code != 0 {
 		w.WriteHeader(code)
 	}
